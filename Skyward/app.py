@@ -16,10 +16,10 @@ CORS(app)  # Enable CORS if needed for cross-origin requests
 
 # Set up rate limiting
 limiter = Limiter(
-    app,
     key_func=get_remote_address,
     default_limits=["100 per day", "20 per hour"]
 )
+limiter.init_app(app)
 
 # Secure API key for both YouTube and video update requests (set this on Railway)
 API_KEY = os.environ.get('API_KEY', 'default_api_key')
