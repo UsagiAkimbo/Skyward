@@ -53,6 +53,10 @@ def set_video():
     current_video_id = new_video_id
     return jsonify({'status': 'success', 'videoId': current_video_id})
 
+@app.route('/status', methods=['GET'])
+def status():
+    return jsonify({"status": "ok", "message": "Server is running."})
+
 if __name__ == '__main__':
     # Railway provides the PORT environment variable. Default to 5000 if not set.
     port = int(os.environ.get('PORT', 5000))
