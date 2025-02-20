@@ -31,7 +31,7 @@ limiter.init_app(app)
 # Database Setup
 # -----------------------
 # Use the same database as Mirror. Ensure DATABASE_URL is set in your environment.
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///mirror_db.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///Database.sqlite')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
