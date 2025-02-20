@@ -2,3 +2,5 @@ Werkzeug==2.2.2
 Flask==2.2.3
 Flask-Cors==3.0.10
 gunicorn==20.1.0
+requests==2.26.0
+Flask-Limiter==2.5.3
