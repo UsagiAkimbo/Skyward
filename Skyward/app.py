@@ -31,7 +31,7 @@ limiter.init_app(app)
 # Database Setup
 # -----------------------
 # Use the same database as Mirror. Ensure DATABASE_URL is set in your environment.
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///Database.sqlite')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///mirror_db.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -69,8 +69,11 @@ def index():
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
 def get_next_video():
-    # This endpoint remains as a placeholder or can be modified to return a global approved video.
-    return jsonify({'videoId': "DEFAULT_VIDEO_ID"})
+    # For now, return the latest approved video from the database
+    latest_video = TalentVideo.query.order_by(TalentVideo.published_at.desc()).first()
+    if latest_video:
+        return jsonify({'videoId': latest_video.video_id})
+    return jsonify({'videoId': "DEFAULT_VIDEO_ID"})  # Fallback to a safe default
 
 @app.route('/set_video', methods=['POST'])
 @limiter.limit("10 per minute")
@@ -194,6 +197,88 @@ def get_talent_videos():
             "videos": video_list
         })
     return jsonify(result)
+
+@app.route('/watch', methods=['GET'])
+@limiter.limit("20 per minute")
+def watch_video():
+    video_id = request.args.get('videoId')
+    if not video_id:
+        logger.warning("Missing videoId parameter in /watch request.")
+        abort(400, description="Missing videoId parameter.")
+    
+    # Verify video_id is in approved talent_videos
+    if not TalentVideo.query.filter_by(video_id=video_id).first():
+        logger.warning(f"Unauthorized video_id attempted: {video_id}")
+        abort(403, description="Forbidden: Video not approved.")
+    
+    # Serve the HTML with the videoId injected
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Secure YouTube Player</title>
+        <script src="https://www.youtube.com/iframe_api"></script>
+        <script>
+        // Initial pre-approved video ID set by Flask
+        var defaultVideoId = "{video_id}";
+        var player;
+
+        function onYouTubeIframeAPIReady() {{
+          player = new YT.Player('player', {{
+            height: '100%',
+            width: '100%',
+            videoId: defaultVideoId,
+            playerVars: {{
+              'autoplay': 1,
+              'controls': 0,
+              'modestbranding': 1,
+              'rel': 0
+            }},
+            events: {{
+              'onReady': onPlayerReady
+            }}
+          }});
+        }}
+
+        function onPlayerReady(event) {{
+          // Autoplay is set via playerVars, but can be triggered here if needed
+          // event.target.playVideo();
+        }}
+
+        function loadVideo(videoId) {{
+          player.loadVideoById(videoId);
+          defaultVideoId = videoId; // Update defaultVideoId to the new video
+        }}
+
+        function fetchCommand() {{
+          fetch('/get_next_video')
+            .then(response => {{
+              if (!response.ok) {{
+                throw new Error("Network response was not ok");
+              }}
+              return response.json();
+            }})
+            .then(data => {{
+              if (data.videoId && data.videoId !== defaultVideoId) {{
+                loadVideo(data.videoId);
+              }}
+            }})
+            .catch(error => {{
+              console.error('Error fetching video command:', error);
+            }});
+        }}
+
+        setInterval(fetchCommand, 5000);
+        </script>
+    </head>
+    <body style="margin:0;padding:0;background:black;">
+        <div id="player"></div>
+    </body>
+    </html>
+    """
+    logger.info(f"Serving watch page for videoId: {video_id}")
+    return html_content
 
 # -----------------------
 # Scheduler Setup
