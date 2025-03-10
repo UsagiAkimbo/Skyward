@@ -21,7 +21,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["100 per day", "2
 limiter.init_app(app)
 
 # Database Setup
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///app/Database.sqlite')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
