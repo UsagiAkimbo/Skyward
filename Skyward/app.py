@@ -2,6 +2,7 @@
 import os
 import logging
 import requests
+import sqlite3  # Added for dump_db endpoint
 from flask import Flask, jsonify, request, send_from_directory, abort
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -87,15 +88,16 @@ def youtube_search():
     except ValueError:
         abort(400, description="maxResults must be an integer.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
+    api_key = os.environ.get('API_KEY', 'default_api_key')
     params = {
-        "key": os.environ.get('API_KEY', 'default_api_key'),
+        "key": api_key,
         "q": query,
         "part": "snippet",
         "maxResults": max_results,
         "type": "video",
         "safeSearch": "strict"
     }
-    logger.info(f"Proxying YouTube search for query: {query}, maxResults: {max_results}")
+    logger.info(f"Proxying YouTube search for query: {query}, maxResults: {max_results}, using API key: {api_key}")
     response = requests.get(youtube_api_url, params=params)
     if response.status_code != 200:
         logger.error("YouTube API error: " + response.text)
@@ -111,12 +113,13 @@ def youtube_video():
     if not isinstance(video_id, str) or len(video_id) != 11:
         abort(400, description="Invalid videoId format.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/videos"
+    api_key = os.environ.get('API_KEY', 'default_api_key')
     params = {
-        "key": os.environ.get('API_KEY', 'default_api_key'),
+        "key": api_key,
         "id": video_id,
         "part": "snippet,contentDetails,statistics"
     }
-    logger.info(f"Proxying YouTube video details for videoId: {video_id}")
+    logger.info(f"Proxying YouTube video details for videoId: {video_id}, using API key: {api_key}")
     response = requests.get(youtube_api_url, params=params)
     if response.status_code != 200:
         logger.error("YouTube API error: " + response.text)
@@ -131,14 +134,16 @@ def update_talent_videos():
             logger.info(f"Found {len(talents)} approved talents")
             for talent in talents:
                 youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
+                api_key = os.environ.get('API_KEY', 'your-api-key')
                 params = {
-                    "key": os.environ.get('API_KEY', 'your-api-key'),
+                    "key": api_key,
                     "channelId": talent.channel_id.lstrip('@'),  # Remove @ if present
                     "part": "snippet",
                     "eventType": "live",
                     "type": "video",
                     "maxResults": 5
                 }
+                logger.info(f"Updating videos for {talent.talent_name} using API key: {api_key}")
                 response = requests.get(youtube_api_url, params=params)
                 if response.status_code == 200:
                     data = response.json()
