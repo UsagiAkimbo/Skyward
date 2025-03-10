@@ -165,6 +165,14 @@ def update_talent_videos():
             logger.error(f"Error in update_talent_videos: {str(e)}")
             db.session.rollback()
 
+# Test endpoint to read from the table
+@app.route('/talents', methods=['GET'])
+def get_talents():
+    talents = ApprovedTalent.query.all()
+    result = [{"id": t.id, "talent_name": t.talent_name, "channel_id": t.channel_id} for t in talents]
+    logger.info(f"Returning {len(result)} talents")
+    return jsonify(result)
+
 @app.route('/talent_videos', methods=['GET'])
 @limiter.limit("10 per minute")
 def get_talent_videos():
