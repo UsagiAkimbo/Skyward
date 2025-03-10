@@ -151,37 +151,44 @@ def youtube_video():
 # -----------------------
 
 def update_talent_videos():
-    logger.info("Running talent video update job...")
-    talents = ApprovedTalent.query.all()
-    for talent in talents:
-        youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
-        params = {
-            "key": os.environ.get('API_KEY', 'default_api_key'),
-            "channelId": talent.channel_id,
-            "part": "snippet",
-            "order": "date",
-            "type": "video",
-            "maxResults": 10
-        }
-        response = requests.get(youtube_api_url, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            for item in data.get("items", []):
-                video_id = item["id"]["videoId"]
-                # Check if the video already exists.
-                existing = TalentVideo.query.filter_by(video_id=video_id).first()
-                if not existing:
-                    new_video = TalentVideo(
-                        talent_id=talent.id,
-                        video_id=video_id,
-                        published_at=item["snippet"].get("publishedAt", ""),
-                        title=item["snippet"].get("title", "")
-                    )
-                    db.session.add(new_video)
-            db.session.commit()
-            logger.info(f"Updated videos for talent: {talent.talent_name}")
-        else:
-            logger.error(f"Error fetching videos for {talent.talent_name}: {response.text}")
+    with app.app_context():  # Push application context
+        logger.info("Running talent video update job within app context...")
+        try:
+            talents = ApprovedTalent.query.all()
+            logger.info(f"Found {len(talents)} approved talents")
+            for talent in talents:
+                youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
+                params = {
+                    "key": os.environ.get('API_KEY', 'your-api-key'),
+                    "channelId": talent.channel_id,
+                    "part": "snippet",
+                    "eventType": "live",
+                    "type": "video",
+                    "maxResults": 5
+                }
+                response = requests.get(youtube_api_url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    for item in data.get('items', []):
+                        video_id = item['id']['videoId']
+                        title = item['snippet']['title']
+                        published_at = item['snippet']['publishedAt']
+                        # Check if video already exists to avoid duplicates
+                        if not TalentVideo.query.filter_by(video_id=video_id).first():
+                            video = TalentVideo(
+                                video_id=video_id,
+                                title=title,
+                                published_at=published_at,
+                                talent_id=talent.id
+                            )
+                            db.session.add(video)
+                    db.session.commit()
+                    logger.info(f"Updated videos for {talent.talent_name}")
+                else:
+                    logger.error(f"YouTube API error for {talent.talent_name}: {response.text}")
+        except Exception as e:
+            logger.error(f"Error in update_talent_videos: {str(e)}")
+            db.session.rollback()
 
 @app.route('/talent_videos', methods=['GET'])
 @limiter.limit("10 per minute")
