@@ -26,6 +26,7 @@ if not app.config['SQLALCHEMY_DATABASE_URI']:
     raise ValueError("DATABASE_URL environment variable not set")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+DB_PATH = '/app/Database.sqlite'
 
 # Models for Talent Management
 class ApprovedTalent(db.Model):
@@ -164,6 +165,54 @@ def update_talent_videos():
         except Exception as e:
             logger.error(f"Error in update_talent_videos: {str(e)}")
             db.session.rollback()
+
+@app.route('/dump_db', methods=['GET'])
+def dump_db():
+    try:
+        # Check if the file exists
+        if not os.path.exists(DB_PATH):
+            logger.error(f"Database file not found at {DB_PATH}")
+            return jsonify({"error": f"No database file at {DB_PATH}"}), 500
+
+        logger.info(f"Database file found at {DB_PATH}")
+
+        # Connect directly to SQLite
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Get all table names
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in cursor.fetchall()]
+        logger.info(f"Tables found: {tables}")
+
+        if not tables:
+            logger.warning("No tables in database")
+            conn.close()
+            return jsonify({"message": "Database exists but has no tables"}), 200
+
+        # Dump each table’s contents
+        result = {}
+        for table in tables:
+            cursor.execute(f"SELECT * FROM {table}")
+            rows = cursor.fetchall()
+            # Get column names
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [col[1] for col in cursor.fetchall()]
+            # Format rows as dictionaries
+            table_data = [dict(zip(columns, row)) for row in rows]
+            result[table] = table_data
+            logger.info(f"Dumped {len(table_data)} rows from {table}")
+
+        conn.close()
+        return jsonify({
+            "database_path": DB_PATH,
+            "tables": result
+        })
+
+    except Exception as e:
+        logger.error(f"Error accessing database: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 
 # Test endpoint to read from the table
 @app.route('/talents', methods=['GET'])
