@@ -13,6 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
+logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
