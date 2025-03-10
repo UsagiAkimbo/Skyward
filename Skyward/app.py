@@ -54,10 +54,6 @@ class TalentVideo(db.Model):
     title = db.Column(db.String(256))
     # Additional fields (description, thumbnail URL, etc.) can be added if desired.
 
-# If you manage schema via migrations in Mirror's system, you can remove the following line.
-with app.app_context():
-    db.create_all()
-
 # -----------------------
 # Existing Endpoints
 # -----------------------
