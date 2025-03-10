@@ -54,6 +54,11 @@ class TalentVideo(db.Model):
     title = db.Column(db.String(256))
     # Additional fields (description, thumbnail URL, etc.) can be added if desired.
 
+# After model definitions and before endpoints
+with app.app_context():
+    db.create_all()
+    logger.info("Database tables created or verified: approved_talents, talent_videos")
+
 # -----------------------
 # Existing Endpoints
 # -----------------------
