@@ -1,0 +1,13 @@
+# Nixpacks configuration
+[phases.setup]
+nixPkgs = ['python39', 'postgresql_16']  # Use postgresql_16, not .dev
+nixLibs = ['libpq']  # Optional, for PostgreSQL client libs
+
+[phases.install]
+cmds = ['pip install -r requirements.txt']
+
+[phases.build]
+cmds = ['echo "Build phase complete"']
+
+[start]
+cmd = 'gunicorn app:app --workers 2 --bind 0.0.0.0:$PORT'
