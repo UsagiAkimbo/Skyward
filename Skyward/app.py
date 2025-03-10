@@ -42,11 +42,6 @@ class TalentVideo(db.Model):
     published_at = db.Column(db.String(64))
     title = db.Column(db.String(256))
 
-# Create tables at startup
-with app.app_context():
-    db.create_all()
-    logger.info("Database tables created or verified: approved_talents, talent_videos")
-
 # Existing Endpoints
 @app.route('/')
 @limiter.exempt
