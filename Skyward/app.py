@@ -21,13 +21,15 @@ CORS(app)
 limiter = Limiter(key_func=get_remote_address, default_limits=["100 per day", "20 per hour"])
 limiter.init_app(app)
 
-# Database Setup
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///app/Database.sqlite')
-if not app.config['SQLALCHEMY_DATABASE_URI']:
-    raise ValueError("DATABASE_URL environment variable not set")
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+# SQLite path on Railway
 DB_PATH = '/app/Database.sqlite'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Log file existence at startup
+logger.info(f"Checking database file at startup: {os.path.exists(DB_PATH)}")
+
+db = SQLAlchemy(app)
 
 # Models for Talent Management
 class ApprovedTalent(db.Model):
@@ -219,6 +221,8 @@ def dump_db():
 @app.route('/talents', methods=['GET'])
 def get_talents():
     try:
+        # Log file existence before query
+        logger.info(f"Before query - Database file exists: {os.path.exists(DB_PATH)}")
         talents = ApprovedTalent.query.all()
         result = [{"id": t.id, "talent_name": t.talent_name, "channel_id": t.channel_id} for t in talents]
         logger.info(f"Returning {len(result)} talents")
