@@ -2,6 +2,7 @@
 import os
 import logging
 import requests
+import sqlite3
 from flask import Flask, jsonify, request, send_from_directory, abort
 from flask_cors import CORS
 from flask_limiter import Limiter
