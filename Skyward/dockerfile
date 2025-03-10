@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 5000
+# Expose the port Railway assigns
+EXPOSE $PORT
 
-CMD ["gunicorn", "app:app", "--workers", "2", "--bind", "0.0.0.0:5000"]
+# Run Gunicorn with the PORT env var
+CMD ["sh", "-c", "gunicorn app:app --workers 2 --bind 0.0.0.0:$PORT"]
