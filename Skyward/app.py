@@ -2,7 +2,6 @@
 import os
 import logging
 import requests
-import sqlite3
 from flask import Flask, jsonify, request, send_from_directory, abort
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -25,10 +24,7 @@ limiter.init_app(app)
 DB_PATH = '/app/Database.sqlite'
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Log file existence at startup
 logger.info(f"Checking database file at startup: {os.path.exists(DB_PATH)}")
-
 db = SQLAlchemy(app)
 
 # Models for Talent Management
@@ -46,7 +42,6 @@ class TalentVideo(db.Model):
     published_at = db.Column(db.String(64))
     title = db.Column(db.String(256))
 
-# Existing Endpoints
 @app.route('/')
 @limiter.exempt
 def index():
@@ -81,7 +76,6 @@ def status():
     logger.info("GET /status requested")
     return jsonify({"status": "ok", "message": "Server is running."})
 
-# Proxy Endpoints (YouTube API)
 @app.route('/youtube/search', methods=['GET'])
 @limiter.limit("10 per minute")
 def youtube_search():
@@ -129,10 +123,9 @@ def youtube_video():
         abort(response.status_code, description="YouTube API error.")
     return jsonify(response.json())
 
-# Talent Video Manager Logic
 def update_talent_videos():
     with app.app_context():
-        logger.info("Running talent video update job within app context...")
+        logger.info("Running talent video update job...")
         try:
             talents = ApprovedTalent.query.all()
             logger.info(f"Found {len(talents)} approved talents")
@@ -140,7 +133,7 @@ def update_talent_videos():
                 youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
                 params = {
                     "key": os.environ.get('API_KEY', 'your-api-key'),
-                    "channelId": talent.channel_id,
+                    "channelId": talent.channel_id.lstrip('@'),  # Remove @ if present
                     "part": "snippet",
                     "eventType": "live",
                     "type": "video",
@@ -151,13 +144,11 @@ def update_talent_videos():
                     data = response.json()
                     for item in data.get('items', []):
                         video_id = item['id']['videoId']
-                        title = item['snippet']['title']
-                        published_at = item['snippet']['publishedAt']
                         if not TalentVideo.query.filter_by(video_id=video_id).first():
                             video = TalentVideo(
                                 video_id=video_id,
-                                title=title,
-                                published_at=published_at,
+                                title=item['snippet']['title'],
+                                published_at=item['snippet']['publishedAt'],
                                 talent_id=talent.id
                             )
                             db.session.add(video)
@@ -216,7 +207,6 @@ def dump_db():
         logger.error(f"Error accessing database: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-
 # Endpoint to list talents
 @app.route('/talents', methods=['GET'])
 def get_talents():
@@ -238,12 +228,13 @@ def get_talent_videos():
     result = []
     for talent in talents:
         videos = TalentVideo.query.filter_by(talent_id=talent.id).all()
-        video_list = [{"video_id": video.video_id, "published_at": video.published_at, "title": video.title} for video in videos]
+        video_list = [{"video_id": v.video_id, "published_at": v.published_at, "title": v.title} for v in videos]
         result.append({
             "talent_name": talent.talent_name,
             "channel_id": talent.channel_id,
             "videos": video_list
         })
+    logger.info(f"Returning talent videos for {len(result)} talents")
     return jsonify(result)
 
 @app.route('/watch', methods=['GET'])
@@ -267,28 +258,28 @@ def watch_video():
         var defaultVideoId = "{video_id}";
         var player;
         function onYouTubeIframeAPIReady() {{
-          player = new YT.Player('player', {{
-            height: '100%',
-            width: '100%',
-            videoId: defaultVideoId,
-            playerVars: {{ 'autoplay': 1, 'controls': 0, 'modestbranding': 1, 'rel': 0 }},
-            events: {{ 'onReady': onPlayerReady }}
-          }});
+            player = new YT.Player('player', {{
+                height: '100%',
+                width: '100%',
+                videoId: defaultVideoId,
+                playerVars: {{ 'autoplay': 1, 'controls': 0, 'modestbranding': 1, 'rel': 0 }},
+                events: {{ 'onReady': onPlayerReady }}
+            }});
         }}
         function onPlayerReady(event) {{ }}
         function loadVideo(videoId) {{
-          player.loadVideoById(videoId);
-          defaultVideoId = videoId;
+            player.loadVideoById(videoId);
+            defaultVideoId = videoId;
         }}
         function fetchCommand() {{
-          fetch('/get_next_video').then(response => {{
-            if (!response.ok) throw new Error("Network response was not ok");
-            return response.json();
-          }}).then(data => {{
-            if (data.videoId && data.videoId !== defaultVideoId) loadVideo(data.videoId);
-          }}).catch(error => {{
-            console.error('Error fetching video command:', error);
-          }});
+            fetch('/get_next_video').then(response => {{
+                if (!response.ok) throw new Error("Network response was not ok");
+                return response.json();
+            }}).then(data => {{
+                if (data.videoId && data.videoId !== defaultVideoId) loadVideo(data.videoId);
+            }}).catch(error => {{
+                console.error('Error fetching video command:', error);
+            }});
         }}
         setInterval(fetchCommand, 5000);
         </script>
@@ -306,7 +297,6 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=update_talent_videos, trigger="interval", minutes=10)
 scheduler.start()
 
-# Application Entry Point
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
