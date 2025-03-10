@@ -215,13 +215,17 @@ def dump_db():
         return jsonify({"error": str(e)}), 500
 
 
-# Test endpoint to read from the table
+# Endpoint to list talents
 @app.route('/talents', methods=['GET'])
 def get_talents():
-    talents = ApprovedTalent.query.all()
-    result = [{"id": t.id, "talent_name": t.talent_name, "channel_id": t.channel_id} for t in talents]
-    logger.info(f"Returning {len(result)} talents")
-    return jsonify(result)
+    try:
+        talents = ApprovedTalent.query.all()
+        result = [{"id": t.id, "talent_name": t.talent_name, "channel_id": t.channel_id} for t in talents]
+        logger.info(f"Returning {len(result)} talents")
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error querying talents: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/talent_videos', methods=['GET'])
 @limiter.limit("10 per minute")
