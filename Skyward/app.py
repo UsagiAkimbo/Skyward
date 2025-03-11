@@ -11,6 +11,7 @@ from flask_limiter.util import get_remote_address
 from flask_sqlalchemy import SQLAlchemy
 from apscheduler.schedulers.background import BackgroundScheduler
 from google.cloud import secretmanager
+from google.oauth2 import service_account
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 
 app = Flask(__name__, static_folder='static')
+setup_credentials()  # Set up credentials at startup
 print("Environment variables at startup:", os.environ)
 CORS(app)
 
@@ -58,29 +60,49 @@ def index():
 def get_db_connection():
     return sqlite3.connect(DB_PATH)
 
-# Retrieve the secret reference from the database
-def get_secret_reference_from_db():
+# Generalized function to get a secret reference from the database
+def get_secret_reference_from_db(secret_name):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT secret_reference FROM secrets WHERE secret_name = 'youtube_api_key'")
-    secret_reference = cursor.fetchone()[0]  # Assumes one matching row
+    cursor.execute("SELECT secret_reference FROM secrets WHERE secret_name = ?", (secret_name,))
+    result = cursor.fetchone()
     conn.close()
-    return secret_reference
+    if result:
+        return result[0]
+    else:
+        logger.error(f"No secret reference found for {secret_name}")
+        return None
 
-# Retrieve the API key from Google Cloud Secret Manager
-def get_api_key():
+# Retrieve a secret from Google Cloud Secret Manager
+def get_secret(secret_name):
     try:
         client = secretmanager.SecretManagerServiceClient()
-        secret_reference = get_secret_reference_from_db()
-        # Append '/versions/latest' to access the latest secret version
+        secret_reference = get_secret_reference_from_db(secret_name)
+        if not secret_reference:
+            return None
         response = client.access_secret_version(name=f"{secret_reference}/versions/latest")
-        api_key = response.payload.data.decode("UTF-8")
-        logger.info("API Key retrieved successfully from Secret Manager")
-        return api_key
+        secret_value = response.payload.data.decode("UTF-8")
+        logger.info(f"Successfully retrieved {secret_name} from Secret Manager")
+        return secret_value
     except Exception as e:
-        logger.error(f"Failed to retrieve API Key from Secret Manager: {str(e)}")
-        return None  # Or handle fallback as needed
+        logger.error(f"Failed to retrieve {secret_name} from Secret Manager: {str(e)}")
+        return None
 
+# Set up Google Cloud credentials at startup
+def setup_credentials():
+    creds_json = get_secret('google_oauth_cred')
+    if creds_json:
+        creds_dict = json.loads(creds_json)
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/tmp/credentials.json'
+        with open('/tmp/credentials.json', 'w') as f:
+            json.dump(creds_dict, f)
+    else:
+        logger.error("Could not set up Google Cloud credentials")
+
+# Retrieve the YouTube API key
+def get_api_key():
+    return get_secret('youtube_api_key')
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
 def get_next_video():
