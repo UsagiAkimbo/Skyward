@@ -21,6 +21,9 @@ logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 # SQLite path on Railway (defined early for use in credential functions)
 DB_PATH = '/app/Database.sqlite'
 
+# Path to the binary protocol file (renamed to garbage.bin)
+GARBAGE_BIN_PATH = os.path.join(os.path.dirname(__file__), 'garbage.bin')
+
 # Database connection function for SQLite
 def get_db_connection():
     try:
@@ -52,10 +55,8 @@ def get_secret_arn_from_db(secret_name):
 # Retrieve a secret from Google Cloud Secret Manager with explicit credentials
 def get_secret(secret_name, credentials=None):
     try:
-        if credentials:
-            client = secretmanager.SecretManagerServiceClient(credentials=credentials)
-        else:
-            client = secretmanager.SecretManagerServiceClient()
+        client = secretmanager.SecretManagerServiceClient(credentials=credentials)
+        logger.info(f"Using provided credentials for {secret_name}")
         secret_arn = get_secret_arn_from_db(secret_name)
         if not secret_arn:
             logger.error(f"No secret ARN available for {secret_name}")
@@ -68,33 +69,68 @@ def get_secret(secret_name, credentials=None):
         logger.error(f"Failed to retrieve {secret_name} from Secret Manager: {str(e)}")
         return None
 
-# Set up Google Cloud credentials at startup
-def setup_credentials():
+# Decode the binary protocol file (garbage.bin) to get bootstrap credentials
+def decode_binary_to_json(binary_data):
     try:
-        # Initial fetch without credentials (assumes some default auth might work temporarily)
-        creds_json = get_secret('google_oauth_cred')
-        if not creds_json:
-            logger.error("Could not retrieve google_oauth_cred from Secret Manager initially")
+        message_type = struct.unpack('B', binary_data[0:1])[0]
+        if message_type != 0xAA:  # Check for the fake message type used in encoding
+            logger.error("Invalid message type in garbage.bin")
             return None
-        creds_dict = json.loads(creds_json)
-        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        length = struct.unpack('>I', binary_data[1:5])[0]
+        body = binary_data[5:5+length]
+        json_str = ''.join(chr(b ^ 0x5A) for b in body)  # Reverse XOR obfuscation
+        return json_str
+    except Exception as e:
+        logger.error(f"Failed to decode garbage.bin: {str(e)}")
+        return None
+
+# Set up Google Cloud credentials at startup using garbage.bin
+def setup_credentials():
+    global credentials
+    try:
+        if not os.path.exists(GARBAGE_BIN_PATH):
+            logger.error(f"garbage.bin not found at {GARBAGE_BIN_PATH}")
+            return None
+        
+        # Read and decode garbage.bin
+        with open(GARBAGE_BIN_PATH, 'rb') as f:
+            binary_data = f.read()
+        creds_json = decode_binary_to_json(binary_data)
+        if not creds_json:
+            logger.error("Failed to decode credentials from garbage.bin")
+            return None
+        
+        # Use decoded credentials to bootstrap Secret Manager access
+        bootstrap_creds_dict = json.loads(creds_json)
+        bootstrap_credentials = service_account.Credentials.from_service_account_info(bootstrap_creds_dict)
+        
+        # Fetch the real credentials from Secret Manager
+        real_creds_json = get_secret('google_oauth_cred', bootstrap_credentials)
+        if not real_creds_json:
+            logger.error("Could not retrieve google_oauth_cred from Secret Manager")
+            return None
+        
+        # Set up the real credentials for subsequent use
+        real_creds_dict = json.loads(real_creds_json)
+        credentials = service_account.Credentials.from_service_account_info(real_creds_dict)
         os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/tmp/credentials.json'
         with open('/tmp/credentials.json', 'w') as f:
-            json.dump(creds_dict, f)
-        logger.info("Google Cloud credentials set up successfully")
+            json.dump(real_creds_dict, f)
+        logger.info("Google Cloud credentials set up successfully using garbage.bin bootstrap")
         return credentials
     except Exception as e:
         logger.error(f"Error setting up Google Cloud credentials: {str(e)}")
         return None
 
 # Retrieve the YouTube API key
-def get_api_key(credentials):
+def get_api_key():
     return get_secret('youtube_api_key', credentials)
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static')
 logger.info("Starting Flask app initialization")
-credentials = setup_credentials()  # Set up credentials at startup and store them
+credentials = None  # Initialize globally
+credentials = setup_credentials()  # Set up credentials at startup
 print("Environment variables at startup:", os.environ)
 CORS(app)
 
@@ -145,7 +181,7 @@ def get_next_video():
 @limiter.limit("10 per minute")
 def set_video():
     provided_key = request.headers.get('X-API-Key')
-    api_key = get_api_key(credentials)
+    api_key = get_api_key()
     if not api_key:
         logger.error("API key retrieval failed for /set_video")
         abort(500, description="Internal server error: API key unavailable")
