@@ -31,33 +31,33 @@ def get_db_connection():
         logger.error(f"Failed to connect to database: {str(e)}")
         raise
 
-# Generalized function to get a secret reference from the database
-def get_secret_reference_from_db(secret_name):
+# Generalized function to get a secret ARN from the database
+def get_secret_arn_from_db(secret_name):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT secret_reference FROM secrets WHERE secret_name = ?", (secret_name,))
+        cursor.execute("SELECT secret_arn FROM secrets WHERE secret_name = ?", (secret_name,))
         result = cursor.fetchone()
         conn.close()
         if result:
-            logger.info(f"Found secret reference for {secret_name}: {result[0]}")
+            logger.info(f"Found secret ARN for {secret_name}: {result[0]}")
             return result[0]
         else:
-            logger.error(f"No secret reference found for {secret_name}")
+            logger.error(f"No secret ARN found for {secret_name}")
             return None
     except Exception as e:
-        logger.error(f"Error querying secret reference for {secret_name}: {str(e)}")
+        logger.error(f"Error querying secret ARN for {secret_name}: {str(e)}")
         return None
 
 # Retrieve a secret from Google Cloud Secret Manager
 def get_secret(secret_name):
     try:
         client = secretmanager.SecretManagerServiceClient()
-        secret_reference = get_secret_reference_from_db(secret_name)
-        if not secret_reference:
-            logger.error(f"No secret reference available for {secret_name}")
+        secret_arn = get_secret_arn_from_db(secret_name)
+        if not secret_arn:
+            logger.error(f"No secret ARN available for {secret_name}")
             return None
-        response = client.access_secret_version(name=f"{secret_reference}/versions/latest")
+        response = client.access_secret_version(name=f"{secret_arn}/versions/latest")
         secret_value = response.payload.data.decode("UTF-8")
         logger.info(f"Successfully retrieved {secret_name} from Secret Manager")
         return secret_value
