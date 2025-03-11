@@ -1,1 +1,1 @@
-web: gunicorn app:app --bind 0.0.0.0:$PORT
+web: VAR1=hello API_KEY=${{shared.API_KEY}} gunicorn app:app --bind 0.0.0.0:$PORT
