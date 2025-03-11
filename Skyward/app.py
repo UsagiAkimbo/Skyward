@@ -51,7 +51,7 @@ class TalentVideo(db.Model):
 def index():
         var1 = os.environ.get('VAR1', 'default')
         return f'VAR1 is {var1}'
-    # return send_from_directory('static', 'index.html')
+# return send_from_directory('static', 'index.html')
 
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
