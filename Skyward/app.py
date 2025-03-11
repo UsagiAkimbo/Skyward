@@ -93,7 +93,8 @@ def get_next_video():
 @limiter.limit("10 per minute")
 def set_video():
     provided_key = request.headers.get('X-API-Key')
-    if provided_key != os.environ.get('API_KEY', 'default_api_key'):
+    api_key = get_api_key()
+    if provided_key != api_key:
         logger.warning("Invalid API key provided for /set_video.")
         abort(403, description="Forbidden: Invalid API key")
     data = request.get_json()
@@ -121,7 +122,9 @@ def youtube_search():
     except ValueError:
         abort(400, description="maxResults must be an integer.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
-    api_key = os.environ.get('API_KEY', 'default_api_key')
+    api_key = get_api_key()
+    if not api_key:
+        abort(500, description="Failed to retrieve API key")
     params = {
         "key": api_key,
         "q": query,
@@ -130,7 +133,7 @@ def youtube_search():
         "type": "video",
         "safeSearch": "strict"
     }
-    logger.info(f"Proxying YouTube search for query: {query}, maxResults: {max_results}, using API key: {api_key}")
+    logger.info(f"Proxying YouTube search for query: {query}, maxResults: {max_results}, using API key")
     response = requests.get(youtube_api_url, params=params)
     if response.status_code != 200:
         logger.error("YouTube API error: " + response.text)
@@ -146,13 +149,15 @@ def youtube_video():
     if not isinstance(video_id, str) or len(video_id) != 11:
         abort(400, description="Invalid videoId format.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/videos"
-    api_key = os.environ.get('API_KEY', 'default_api_key')
+    api_key = get_api_key()
+    if not api_key:
+        abort(500, description="Failed to retrieve API key")
     params = {
         "key": api_key,
         "id": video_id,
         "part": "snippet,contentDetails,statistics"
     }
-    logger.info(f"Proxying YouTube video details for videoId: {video_id}, using API key: {api_key}")
+    logger.info(f"Proxying YouTube video details for videoId: {video_id}, using API key")
     response = requests.get(youtube_api_url, params=params)
     if response.status_code != 200:
         logger.error("YouTube API error: " + response.text)
@@ -165,9 +170,12 @@ def update_talent_videos():
         try:
             talents = ApprovedTalent.query.all()
             logger.info(f"Found {len(talents)} approved talents")
+            api_key = get_api_key()
+            if not api_key:
+                logger.error("Failed to retrieve API key for talent video update")
+                return
             for talent in talents:
                 youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
-                api_key = os.environ.get('API_KEY', 'your-api-key')
                 params = {
                     "key": api_key,
                     "channelId": talent.channel_id.lstrip('@'),  # Remove @ if present
@@ -176,7 +184,7 @@ def update_talent_videos():
                     "type": "video",
                     "maxResults": 5
                 }
-                logger.info(f"Updating videos for {talent.talent_name} using API key: {api_key}")
+                logger.info(f"Updating videos for {talent.talent_name} using API key")
                 response = requests.get(youtube_api_url, params=params)
                 if response.status_code == 200:
                     data = response.json()
