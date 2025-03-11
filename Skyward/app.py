@@ -18,44 +18,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 
-app = Flask(__name__, static_folder='static')
-setup_credentials()  # Set up credentials at startup
-print("Environment variables at startup:", os.environ)
-CORS(app)
-
-# Rate Limiting Setup
-limiter = Limiter(key_func=get_remote_address, default_limits=["100 per day", "20 per hour"])
-limiter.init_app(app)
-
-# SQLite path on Railway
-DB_PATH = '/app/Database.sqlite'
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-logger.info(f"Checking database file at startup: {os.path.exists(DB_PATH)}")
-db = SQLAlchemy(app)
-
-# Models for Talent Management
-class ApprovedTalent(db.Model):
-    __tablename__ = 'approved_talents'
-    id = db.Column(db.Integer, primary_key=True)
-    talent_name = db.Column(db.String(128), nullable=False)
-    channel_id = db.Column(db.String(64), nullable=False)
-
-class TalentVideo(db.Model):
-    __tablename__ = 'talent_videos'
-    id = db.Column(db.Integer, primary_key=True)
-    talent_id = db.Column(db.Integer, db.ForeignKey('approved_talents.id'), nullable=False)
-    video_id = db.Column(db.String(64), nullable=False, unique=True)
-    published_at = db.Column(db.String(64))
-    title = db.Column(db.String(256))
-
-@app.route('/')
-@limiter.exempt
-def index():
-        var1 = os.environ.get('VAR1', 'default')
-        return f'VAR1 is {var1}'
-# return send_from_directory('static', 'index.html')
-
 # Database connection function for SQLite
 def get_db_connection():
     return sqlite3.connect(DB_PATH)
@@ -103,6 +65,45 @@ def setup_credentials():
 # Retrieve the YouTube API key
 def get_api_key():
     return get_secret('youtube_api_key')
+
+app = Flask(__name__, static_folder='static')
+setup_credentials()  # Set up credentials at startup
+print("Environment variables at startup:", os.environ)
+CORS(app)
+
+# Rate Limiting Setup
+limiter = Limiter(key_func=get_remote_address, default_limits=["100 per day", "20 per hour"])
+limiter.init_app(app)
+
+# SQLite path on Railway
+DB_PATH = '/app/Database.sqlite'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+logger.info(f"Checking database file at startup: {os.path.exists(DB_PATH)}")
+db = SQLAlchemy(app)
+
+# Models for Talent Management
+class ApprovedTalent(db.Model):
+    __tablename__ = 'approved_talents'
+    id = db.Column(db.Integer, primary_key=True)
+    talent_name = db.Column(db.String(128), nullable=False)
+    channel_id = db.Column(db.String(64), nullable=False)
+
+class TalentVideo(db.Model):
+    __tablename__ = 'talent_videos'
+    id = db.Column(db.Integer, primary_key=True)
+    talent_id = db.Column(db.Integer, db.ForeignKey('approved_talents.id'), nullable=False)
+    video_id = db.Column(db.String(64), nullable=False, unique=True)
+    published_at = db.Column(db.String(64))
+    title = db.Column(db.String(256))
+
+@app.route('/')
+@limiter.exempt
+def index():
+        var1 = os.environ.get('VAR1', 'default')
+        return f'VAR1 is {var1}'
+# return send_from_directory('static', 'index.html')
+
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
 def get_next_video():
