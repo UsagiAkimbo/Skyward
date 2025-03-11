@@ -20,19 +20,30 @@ logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 
 # Database connection function for SQLite
 def get_db_connection():
-    return sqlite3.connect(DB_PATH)
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        logger.info("Database connection established")
+        return conn
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {str(e)}")
+        raise
 
 # Generalized function to get a secret reference from the database
 def get_secret_reference_from_db(secret_name):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT secret_reference FROM secrets WHERE secret_name = ?", (secret_name,))
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        return result[0]
-    else:
-        logger.error(f"No secret reference found for {secret_name}")
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT secret_reference FROM secrets WHERE secret_name = ?", (secret_name,))
+        result = cursor.fetchone()
+        conn.close()
+        if result:
+            logger.info(f"Found secret reference for {secret_name}: {result[0]}")
+            return result[0]
+        else:
+            logger.error(f"No secret reference found for {secret_name}")
+            return None
+    except Exception as e:
+        logger.error(f"Error querying secret reference for {secret_name}: {str(e)}")
         return None
 
 # Retrieve a secret from Google Cloud Secret Manager
@@ -41,6 +52,7 @@ def get_secret(secret_name):
         client = secretmanager.SecretManagerServiceClient()
         secret_reference = get_secret_reference_from_db(secret_name)
         if not secret_reference:
+            logger.error(f"No secret reference available for {secret_name}")
             return None
         response = client.access_secret_version(name=f"{secret_reference}/versions/latest")
         secret_value = response.payload.data.decode("UTF-8")
@@ -52,21 +64,27 @@ def get_secret(secret_name):
 
 # Set up Google Cloud credentials at startup
 def setup_credentials():
-    creds_json = get_secret('google_oauth_cred')
-    if creds_json:
-        creds_dict = json.loads(creds_json)
-        credentials = service_account.Credentials.from_service_account_info(creds_dict)
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/tmp/credentials.json'
-        with open('/tmp/credentials.json', 'w') as f:
-            json.dump(creds_dict, f)
-    else:
-        logger.error("Could not set up Google Cloud credentials")
+    try:
+        creds_json = get_secret('google_oauth_cred')
+        if creds_json:
+            creds_dict = json.loads(creds_json)
+            credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/tmp/credentials.json'
+            with open('/tmp/credentials.json', 'w') as f:
+                json.dump(creds_dict, f)
+            logger.info("Google Cloud credentials set up successfully")
+        else:
+            logger.error("Could not retrieve google_oauth_cred from Secret Manager")
+    except Exception as e:
+        logger.error(f"Error setting up Google Cloud credentials: {str(e)}")
 
 # Retrieve the YouTube API key
 def get_api_key():
     return get_secret('youtube_api_key')
 
+# Initialize Flask app
 app = Flask(__name__, static_folder='static')
+logger.info("Starting Flask app initialization")
 setup_credentials()  # Set up credentials at startup
 print("Environment variables at startup:", os.environ)
 CORS(app)
@@ -80,7 +98,11 @@ DB_PATH = '/app/Database.sqlite'
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 logger.info(f"Checking database file at startup: {os.path.exists(DB_PATH)}")
-db = SQLAlchemy(app)
+try:
+    db = SQLAlchemy(app)
+    logger.info("SQLAlchemy initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize SQLAlchemy: {str(e)}")
 
 # Models for Talent Management
 class ApprovedTalent(db.Model):
@@ -117,6 +139,9 @@ def get_next_video():
 def set_video():
     provided_key = request.headers.get('X-API-Key')
     api_key = get_api_key()
+    if not api_key:
+        logger.error("API key retrieval failed for /set_video")
+        abort(500, description="Internal server error: API key unavailable")
     if provided_key != api_key:
         logger.warning("Invalid API key provided for /set_video.")
         abort(403, description="Forbidden: Invalid API key")
@@ -362,9 +387,13 @@ def watch_video():
     return html_content
 
 # Scheduler Setup
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=update_talent_videos, trigger="interval", minutes=10)
-scheduler.start()
+try:
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(func=update_talent_videos, trigger="interval", minutes=10)
+    scheduler.start()
+    logger.info("Scheduler started successfully")
+except Exception as e:
+    logger.error(f"Failed to start scheduler: {str(e)}")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
