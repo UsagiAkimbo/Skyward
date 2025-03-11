@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+var1 = os.environ.get('VAR1')  # Returns None if VAR1 is unset
 import logging
 import requests
 import sqlite3  # Added for dump_db endpoint
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 
 app = Flask(__name__, static_folder='static')
+print("Environment variables at startup:", os.environ)
 CORS(app)
 
 # Rate Limiting Setup
@@ -47,7 +49,9 @@ class TalentVideo(db.Model):
 @app.route('/')
 @limiter.exempt
 def index():
-    return send_from_directory('static', 'index.html')
+        var1 = os.environ.get('VAR1', 'default')
+    return f'VAR1 is {var1}'
+    # return send_from_directory('static', 'index.html')
 
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
