@@ -18,6 +18,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 
+# SQLite path on Railway (defined early for use in credential functions)
+DB_PATH = '/app/Database.sqlite'
+
 # Database connection function for SQLite
 def get_db_connection():
     try:
@@ -93,8 +96,6 @@ CORS(app)
 limiter = Limiter(key_func=get_remote_address, default_limits=["100 per day", "20 per hour"])
 limiter.init_app(app)
 
-# SQLite path on Railway
-DB_PATH = '/app/Database.sqlite'
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 logger.info(f"Checking database file at startup: {os.path.exists(DB_PATH)}")
