@@ -49,10 +49,13 @@ def get_secret_arn_from_db(secret_name):
         logger.error(f"Error querying secret ARN for {secret_name}: {str(e)}")
         return None
 
-# Retrieve a secret from Google Cloud Secret Manager
-def get_secret(secret_name):
+# Retrieve a secret from Google Cloud Secret Manager with explicit credentials
+def get_secret(secret_name, credentials=None):
     try:
-        client = secretmanager.SecretManagerServiceClient()
+        if credentials:
+            client = secretmanager.SecretManagerServiceClient(credentials=credentials)
+        else:
+            client = secretmanager.SecretManagerServiceClient()
         secret_arn = get_secret_arn_from_db(secret_name)
         if not secret_arn:
             logger.error(f"No secret ARN available for {secret_name}")
@@ -68,27 +71,30 @@ def get_secret(secret_name):
 # Set up Google Cloud credentials at startup
 def setup_credentials():
     try:
+        # Initial fetch without credentials (assumes some default auth might work temporarily)
         creds_json = get_secret('google_oauth_cred')
-        if creds_json:
-            creds_dict = json.loads(creds_json)
-            credentials = service_account.Credentials.from_service_account_info(creds_dict)
-            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/tmp/credentials.json'
-            with open('/tmp/credentials.json', 'w') as f:
-                json.dump(creds_dict, f)
-            logger.info("Google Cloud credentials set up successfully")
-        else:
-            logger.error("Could not retrieve google_oauth_cred from Secret Manager")
+        if not creds_json:
+            logger.error("Could not retrieve google_oauth_cred from Secret Manager initially")
+            return None
+        creds_dict = json.loads(creds_json)
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/tmp/credentials.json'
+        with open('/tmp/credentials.json', 'w') as f:
+            json.dump(creds_dict, f)
+        logger.info("Google Cloud credentials set up successfully")
+        return credentials
     except Exception as e:
         logger.error(f"Error setting up Google Cloud credentials: {str(e)}")
+        return None
 
 # Retrieve the YouTube API key
-def get_api_key():
-    return get_secret('youtube_api_key')
+def get_api_key(credentials):
+    return get_secret('youtube_api_key', credentials)
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static')
 logger.info("Starting Flask app initialization")
-setup_credentials()  # Set up credentials at startup
+credentials = setup_credentials()  # Set up credentials at startup and store them
 print("Environment variables at startup:", os.environ)
 CORS(app)
 
@@ -139,7 +145,7 @@ def get_next_video():
 @limiter.limit("10 per minute")
 def set_video():
     provided_key = request.headers.get('X-API-Key')
-    api_key = get_api_key()
+    api_key = get_api_key(credentials)
     if not api_key:
         logger.error("API key retrieval failed for /set_video")
         abort(500, description="Internal server error: API key unavailable")
@@ -171,7 +177,7 @@ def youtube_search():
     except ValueError:
         abort(400, description="maxResults must be an integer.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
-    api_key = get_api_key()
+    api_key = get_api_key(credentials)
     if not api_key:
         abort(500, description="Failed to retrieve API key")
     params = {
@@ -198,7 +204,7 @@ def youtube_video():
     if not isinstance(video_id, str) or len(video_id) != 11:
         abort(400, description="Invalid videoId format.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/videos"
-    api_key = get_api_key()
+    api_key = get_api_key(credentials)
     if not api_key:
         abort(500, description="Failed to retrieve API key")
     params = {
@@ -219,7 +225,7 @@ def update_talent_videos():
         try:
             talents = ApprovedTalent.query.all()
             logger.info(f"Found {len(talents)} approved talents")
-            api_key = get_api_key()
+            api_key = get_api_key(credentials)
             if not api_key:
                 logger.error("Failed to retrieve API key for talent video update")
                 return
@@ -395,7 +401,7 @@ try:
     logger.info("Scheduler started successfully")
 except Exception as e:
     logger.error(f"Failed to start scheduler: {str(e)}")
-
+    
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
