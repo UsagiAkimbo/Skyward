@@ -50,7 +50,7 @@ class TalentVideo(db.Model):
 @limiter.exempt
 def index():
         var1 = os.environ.get('VAR1', 'default')
-    return f'VAR1 is {var1}'
+        return f'VAR1 is {var1}'
     # return send_from_directory('static', 'index.html')
 
 @app.route('/get_next_video', methods=['GET'])
