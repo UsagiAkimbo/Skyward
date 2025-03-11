@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
-var1 = os.environ.get('VAR1')  # Returns None if VAR1 is unset
 import logging
 import requests
 import sqlite3  # Added for dump_db endpoint
+import json
+import struct  # Added for binary decoding
 from flask import Flask, jsonify, request, send_from_directory, abort
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -165,9 +166,8 @@ class TalentVideo(db.Model):
 @app.route('/')
 @limiter.exempt
 def index():
-        var1 = os.environ.get('VAR1', 'default')
-        return f'VAR1 is {var1}'
-# return send_from_directory('static', 'index.html')
+    var1 = os.environ.get('VAR1', 'default')
+    return f'VAR1 is {var1}'
 
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
@@ -213,7 +213,7 @@ def youtube_search():
     except ValueError:
         abort(400, description="maxResults must be an integer.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
-    api_key = get_api_key(credentials)
+    api_key = get_api_key()  # Already uses global credentials
     if not api_key:
         abort(500, description="Failed to retrieve API key")
     params = {
@@ -240,7 +240,7 @@ def youtube_video():
     if not isinstance(video_id, str) or len(video_id) != 11:
         abort(400, description="Invalid videoId format.")
     youtube_api_url = "https://www.googleapis.com/youtube/v3/videos"
-    api_key = get_api_key(credentials)
+    api_key = get_api_key()  # Already uses global credentials
     if not api_key:
         abort(500, description="Failed to retrieve API key")
     params = {
@@ -261,7 +261,7 @@ def update_talent_videos():
         try:
             talents = ApprovedTalent.query.all()
             logger.info(f"Found {len(talents)} approved talents")
-            api_key = get_api_key(credentials)
+            api_key = get_api_key()  # Already uses global credentials
             if not api_key:
                 logger.error("Failed to retrieve API key for talent video update")
                 return
@@ -300,18 +300,13 @@ def update_talent_videos():
 @app.route('/dump_db', methods=['GET'])
 def dump_db():
     try:
-        # Check if the file exists
         if not os.path.exists(DB_PATH):
             logger.error(f"Database file not found at {DB_PATH}")
             return jsonify({"error": f"No database file at {DB_PATH}"}), 500
 
         logger.info(f"Database file found at {DB_PATH}")
-
-        # Connect directly to SQLite
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-
-        # Get all table names
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [row[0] for row in cursor.fetchall()]
         logger.info(f"Tables found: {tables}")
@@ -321,34 +316,25 @@ def dump_db():
             conn.close()
             return jsonify({"message": "Database exists but has no tables"}), 200
 
-        # Dump each table’s contents
         result = {}
         for table in tables:
             cursor.execute(f"SELECT * FROM {table}")
             rows = cursor.fetchall()
-            # Get column names
             cursor.execute(f"PRAGMA table_info({table})")
             columns = [col[1] for col in cursor.fetchall()]
-            # Format rows as dictionaries
             table_data = [dict(zip(columns, row)) for row in rows]
             result[table] = table_data
             logger.info(f"Dumped {len(table_data)} rows from {table}")
 
         conn.close()
-        return jsonify({
-            "database_path": DB_PATH,
-            "tables": result
-        })
-
+        return jsonify({"database_path": DB_PATH, "tables": result})
     except Exception as e:
         logger.error(f"Error accessing database: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Endpoint to list talents
 @app.route('/talents', methods=['GET'])
 def get_talents():
     try:
-        # Log file existence before query
         logger.info(f"Before query - Database file exists: {os.path.exists(DB_PATH)}")
         talents = ApprovedTalent.query.all()
         result = [{"id": t.id, "talent_name": t.talent_name, "channel_id": t.channel_id} for t in talents]
@@ -437,7 +423,7 @@ try:
     logger.info("Scheduler started successfully")
 except Exception as e:
     logger.error(f"Failed to start scheduler: {str(e)}")
-    
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
