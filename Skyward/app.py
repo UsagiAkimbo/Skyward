@@ -261,15 +261,41 @@ def update_talent_videos():
         try:
             talents = ApprovedTalent.query.all()
             logger.info(f"Found {len(talents)} approved talents")
-            api_key = get_api_key()  # Already uses global credentials
+            api_key = get_api_key()
             if not api_key:
                 logger.error("Failed to retrieve API key for talent video update")
                 return
+
             for talent in talents:
+                # Check if channel_id is a handle (starts with @)
+                channel_input = talent.channel_id.lstrip('@')
+                if not channel_input.startswith('UC'):  # Assume UC prefix for channel IDs
+                    # Convert handle to channel ID
+                    channels_url = "https://www.googleapis.com/youtube/v3/channels"
+                    channels_params = {
+                        "key": api_key,
+                        "forUsername": channel_input,
+                        "part": "id",
+                        "maxResults": 1
+                    }
+                    response = requests.get(channels_url, params=channels_params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('items'):
+                            channel_id = data['items'][0]['id']
+                        else:
+                            logger.error(f"No channel ID found for handle {channel_input}")
+                            continue
+                    else:
+                        logger.error(f"Failed to fetch channel ID for {channel_input}: {response.text}")
+                        continue
+                else:
+                    channel_id = channel_input
+
                 youtube_api_url = "https://www.googleapis.com/youtube/v3/search"
                 params = {
                     "key": api_key,
-                    "channelId": talent.channel_id.lstrip('@'),  # Remove @ if present
+                    "channelId": channel_id,
                     "part": "snippet",
                     "eventType": "live",
                     "type": "video",
