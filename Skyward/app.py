@@ -54,6 +54,33 @@ def index():
         return f'VAR1 is {var1}'
 # return send_from_directory('static', 'index.html')
 
+# Database connection function for SQLite
+def get_db_connection():
+    return sqlite3.connect(DB_PATH)
+
+# Retrieve the secret reference from the database
+def get_secret_reference_from_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT secret_reference FROM secrets WHERE secret_name = 'youtube_api_key'")
+    secret_reference = cursor.fetchone()[0]  # Assumes one matching row
+    conn.close()
+    return secret_reference
+
+# Retrieve the API key from Google Cloud Secret Manager
+def get_api_key():
+    try:
+        client = secretmanager.SecretManagerServiceClient()
+        secret_reference = get_secret_reference_from_db()
+        # Append '/versions/latest' to access the latest secret version
+        response = client.access_secret_version(name=f"{secret_reference}/versions/latest")
+        api_key = response.payload.data.decode("UTF-8")
+        logger.info("API Key retrieved successfully from Secret Manager")
+        return api_key
+    except Exception as e:
+        logger.error(f"Failed to retrieve API Key from Secret Manager: {str(e)}")
+        return None  # Or handle fallback as needed
+
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
 def get_next_video():
