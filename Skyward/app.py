@@ -155,6 +155,47 @@ def unsubscribe_from_channel(channel_id):
     else:
         logger.error(f"Failed to unsubscribe from {channel_id}: {response.text}")
 
+def check_and_cache_live_videos():
+    with app.app_context():
+        session = db.session
+        talents = session.query(ApprovedTalent).all()
+        logger.info(f"Checking activities for {len(talents)} talents")
+        api_key = get_api_key()
+        for talent in talents:
+            # Get recent activities
+            response = requests.get(
+                "https://www.googleapis.com/youtube/v3/activities",
+                params={
+                    "key": api_key,
+                    "channelId": talent.channel_id,
+                    "part": "snippet,contentDetails",
+                    "maxResults": 10
+                }
+            )
+            if response.status_code == 200:
+                data = response.json()
+                for item in data.get('items', []):
+                    if item['snippet']['type'] == 'upload':
+                        video_id = item['contentDetails']['upload']['videoId']
+                        # Check if it’s live
+                        video_response = requests.get(
+                            "https://www.googleapis.com/youtube/v3/videos",
+                            params={"key": api_key, "id": video_id, "part": "liveStreamingDetails,snippet"}
+                        )
+                        if video_response.status_code == 200:
+                            video_data = video_response.json()
+                            if video_data['items'] and 'liveStreamingDetails' in video_data['items'][0]:
+                                if not session.query(TalentVideo).filter_by(video_id=video_id).first():
+                                    video = TalentVideo(
+                                        video_id=video_id,
+                                        title=video_data['items'][0]['snippet']['title'],
+                                        published_at=video_data['items'][0]['snippet']['publishedAt'],
+                                        talent_id=talent.id
+                                    )
+                                    session.add(video)
+                                    logger.info(f"Cached live video: {video_id} for {talent.talent_name}")
+        session.commit()
+
 def renew_subscriptions():
     with app.app_context():
         session = db.session
@@ -435,8 +476,9 @@ def test_subscription():
 @app.route('/renew_subscriptions')
 def trigger_renew_subscriptions():
     with app.app_context():
+        check_and_cache_live_videos()  # Check activities first
         renew_subscriptions()
-    return "Subscriptions renewed", 200
+    return "Subscriptions renewed and activities checked", 200
 
 @app.route('/talent_videos', methods=['GET'])
 @limiter.limit("10 per minute")
@@ -518,5 +560,6 @@ scheduler.start()
 if __name__ == '__main__':
     setup_credentials()
     with app.app_context():
-        renew_subscriptions()  # Run synchronously on startup
+        check_and_cache_live_videos()  # Initial check on startup
+        renew_subscriptions()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
