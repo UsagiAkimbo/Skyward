@@ -133,11 +133,13 @@ def subscribe_to_channel(channel_id):
         "hub.topic": f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}",
         "hub.callback": callback_url
     }
+    logger.info(f"Attempting subscription to {channel_id}")
     response = requests.post(hub_url, data=data)
     if response.status_code in (202, 204):
-        logger.info(f"Subscribed to channel: {channel_id}")
+        logger.info(f"Subscription queued for {channel_id} - Status: {response.status_code}")
     else:
-        logger.error(f"Failed to subscribe to {channel_id}: {response.text}")
+        logger.error(f"Subscription failed for {channel_id} - Status: {response.status_code}, Response: {response.text}")
+    return response.status_code in (202, 204)
 
 def unsubscribe_from_channel(channel_id):
     hub_url = "https://pubsubhubbub.appspot.com/subscribe"
@@ -209,9 +211,11 @@ def index():
 # Webhook for PubSubHubbub notifications
 @app.route('/youtube/webhook', methods=['GET', 'POST'])
 def youtube_webhook():
-    if request.method == 'GET':  # Subscription verification
+    if request.method == 'GET':
         challenge = request.args.get('hub.challenge')
-        logger.info(f"Verifying webhook with challenge: {challenge}")
+        mode = request.args.get('hub.mode', 'unknown')
+        topic = request.args.get('hub.topic', 'unknown')
+        logger.info(f"Webhook verification - Mode: {mode}, Topic: {topic}, Challenge: {challenge}")
         return challenge, 200
 
     # POST: New video notification
