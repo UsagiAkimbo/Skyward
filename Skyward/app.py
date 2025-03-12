@@ -161,6 +161,8 @@ def check_and_cache_live_videos():
         talents = session.query(ApprovedTalent).all()
         logger.info(f"Checking activities for {len(talents)} talents")
         api_key = get_api_key()
+        redeploy_time = datetime.utcnow().isoformat() + "Z"  # Current UTC time as ISO8601
+
         for talent in talents:
             # Get recent activities
             response = requests.get(
@@ -172,28 +174,44 @@ def check_and_cache_live_videos():
                     "maxResults": 10
                 }
             )
-            if response.status_code == 200:
-                data = response.json()
-                for item in data.get('items', []):
-                    if item['snippet']['type'] == 'upload':
-                        video_id = item['contentDetails']['upload']['videoId']
-                        # Check if it’s live
-                        video_response = requests.get(
-                            "https://www.googleapis.com/youtube/v3/videos",
-                            params={"key": api_key, "id": video_id, "part": "liveStreamingDetails,snippet"}
+            if response.status_code != 200:
+                logger.error(f"Failed activities.list for {talent.channel_id}: {response.text}")
+                continue
+
+            data = response.json()
+            uploads = [item for item in data.get('items', []) if item['snippet']['type'] == 'upload']
+            if not uploads:
+                continue
+
+            # Find closest upload to redeploy time
+            closest = min(
+                uploads,
+                key=lambda x: abs(
+                    (datetime.strptime(x['snippet']['publishedAt'], "%Y-%m-%dT%H:%M:%SZ") - 
+                     datetime.strptime(redeploy_time, "%Y-%m-%dT%H:%M:%SZ")).total_seconds()
+                )
+            )
+            video_id = closest['contentDetails']['upload']['videoId']
+
+            # Verify if live
+            video_response = requests.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={"key": api_key, "id": video_id, "part": "liveStreamingDetails,snippet"}
+            )
+            if video_response.status_code == 200:
+                video_data = video_response.json()
+                if (video_data['items'] and 
+                    'liveStreamingDetails' in video_data['items'][0] and 
+                    'actualEndTime' not in video_data['items'][0]['liveStreamingDetails']):
+                    if not session.query(TalentVideo).filter_by(video_id=video_id).first():
+                        video = TalentVideo(
+                            video_id=video_id,
+                            title=video_data['items'][0]['snippet']['title'],
+                            published_at=video_data['items'][0]['snippet']['publishedAt'],
+                            talent_id=talent.id
                         )
-                        if video_response.status_code == 200:
-                            video_data = video_response.json()
-                            if video_data['items'] and 'liveStreamingDetails' in video_data['items'][0]:
-                                if not session.query(TalentVideo).filter_by(video_id=video_id).first():
-                                    video = TalentVideo(
-                                        video_id=video_id,
-                                        title=video_data['items'][0]['snippet']['title'],
-                                        published_at=video_data['items'][0]['snippet']['publishedAt'],
-                                        talent_id=talent.id
-                                    )
-                                    session.add(video)
-                                    logger.info(f"Cached live video: {video_id} for {talent.talent_name}")
+                        session.add(video)
+                        logger.info(f"Cached live video: {video_id} for {talent.talent_name}")
         session.commit()
 
 def renew_subscriptions():
