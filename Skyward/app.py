@@ -156,11 +156,13 @@ def unsubscribe_from_channel(channel_id):
         logger.error(f"Failed to unsubscribe from {channel_id}: {response.text}")
 
 def renew_subscriptions():
-    with db.session_scope() as session:
+    with app.app_context():
+        session = db.session
         talents = session.query(ApprovedTalent).all()
+        logger.info(f"Renewing subscriptions for {len(talents)} talents")
         for talent in talents:
-            unsubscribe_from_channel(talent.channel_id)  # Optional: clean up old subscription
             subscribe_to_channel(talent.channel_id)
+        session.commit()
 
 # Retrieve the YouTube API key
 def get_api_key():
@@ -218,42 +220,33 @@ def youtube_webhook():
         logger.info(f"Webhook verification - Mode: {mode}, Topic: {topic}, Challenge: {challenge}")
         return challenge, 200
 
-    # POST: New video notification
     xml_data = request.data.decode('utf-8')
-    logger.info(f"Received webhook notification: {xml_data[:100]}...")  # Truncate for brevity
+    logger.info(f"Received webhook notification: {xml_data[:100]}...")
     root = ET.fromstring(xml_data)
     video_id = root.find('.//{http://www.youtube.com/xml/schemas/2015}videoId').text
     channel_id = root.find('.//{http://www.youtube.com/xml/schemas/2015}channelId').text
     published_at = root.find('.//{http://www.w3.org/2005/Atom}published').text
 
-    # Check if video is live
     api_key = get_api_key()
     response = requests.get(
         "https://www.googleapis.com/youtube/v3/videos",
-        params={
-            "key": api_key,
-            "id": video_id,
-            "part": "liveStreamingDetails,snippet"
-        }
+        params={"key": api_key, "id": video_id, "part": "liveStreamingDetails,snippet"}
     )
     if response.status_code == 200:
         data = response.json()
         if data['items'] and 'liveStreamingDetails' in data['items'][0]:
-            with db.session_scope() as session:
-                talent = session.query(ApprovedTalent).filter_by(channel_id=channel_id).first()
-                if talent and not session.query(TalentVideo).filter_by(video_id=video_id).first():
-                    video = TalentVideo(
-                        video_id=video_id,
-                        title=data['items'][0]['snippet']['title'],
-                        published_at=published_at,
-                        talent_id=talent.id
-                    )
-                    session.add(video)
-                    session.commit()
-                    logger.info(f"Cached live video: {video_id} for {talent.talent_name}")
-    else:
-        logger.error(f"Failed to fetch video details: {response.text}")
-
+            session = db.session
+            talent = session.query(ApprovedTalent).filter_by(channel_id=channel_id).first()
+            if talent and not session.query(TalentVideo).filter_by(video_id=video_id).first():
+                video = TalentVideo(
+                    video_id=video_id,
+                    title=data['items'][0]['snippet']['title'],
+                    published_at=published_at,
+                    talent_id=talent.id
+                )
+                session.add(video)
+                session.commit()
+                logger.info(f"Cached live video: {video_id} for {talent.talent_name}")
     return '', 204
 
 @app.route('/get_next_video', methods=['GET'])
@@ -385,6 +378,7 @@ def update_talent_videos():
             logger.error(f"Error in update_talent_videos: {str(e)}")
             db.session.rollback()
 
+# Test routes
 @app.route('/dump_db', methods=['GET'])
 def dump_db():
     try:
@@ -432,11 +426,10 @@ def get_talents():
         logger.error(f"Error querying talents: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Test route
 @app.route('/test_subscription')
 def test_subscription():
     with app.app_context():
-        subscribe_to_channel("UCgnfPPb9JI3e9A4cXHnWbyg")  # Shiori Novella
+        subscribe_to_channel("UCgnfPPb9JI3e9A4cXHnWbyg")
     return "Subscription test triggered", 200
 
 @app.route('/renew_subscriptions')
@@ -461,6 +454,7 @@ def get_talent_videos():
     logger.info(f"Returning talent videos for {len(result)} talents")
     return jsonify(result)
 
+# Display
 @app.route('/watch', methods=['GET'])
 @limiter.limit("20 per minute")
 def watch_video():
