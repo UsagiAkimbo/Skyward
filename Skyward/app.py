@@ -419,7 +419,7 @@ def watch_video():
 # Scheduler Setup
 try:
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_talent_videos, trigger="interval", minutes=60)
+    scheduler.add_job(func=update_talent_videos, trigger="interval", minutes=240)
     scheduler.start()
     logger.info("Scheduler started successfully")
 except Exception as e:
