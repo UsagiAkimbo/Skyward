@@ -439,6 +439,12 @@ def test_subscription():
         subscribe_to_channel("UCgnfPPb9JI3e9A4cXHnWbyg")  # Shiori Novella
     return "Subscription test triggered", 200
 
+@app.route('/renew_subscriptions')
+def trigger_renew_subscriptions():
+    with app.app_context():
+        renew_subscriptions()
+    return "Subscriptions renewed", 200
+
 @app.route('/talent_videos', methods=['GET'])
 @limiter.limit("10 per minute")
 def get_talent_videos():
