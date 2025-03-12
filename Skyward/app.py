@@ -14,6 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from google.cloud import secretmanager
 from google.oauth2 import service_account
 from xml.etree import ElementTree as ET
+from contextlib import contextmanager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -85,6 +86,19 @@ def decode_binary_to_json(binary_data):
     except Exception as e:
         logger.error(f"Failed to decode garbage.bin: {str(e)}")
         return None
+
+@contextmanager
+def session_scope():
+    session = db.session()
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+db.session_scope = session_scope
 
 # Set up Google Cloud credentials at startup using garbage.bin
 def setup_credentials():
