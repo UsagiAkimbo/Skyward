@@ -13,6 +13,7 @@ from flask_sqlalchemy import SQLAlchemy
 from apscheduler.schedulers.background import BackgroundScheduler
 from google.cloud import secretmanager
 from google.oauth2 import service_account
+from xml.etree import ElementTree as ET
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -123,6 +124,42 @@ def setup_credentials():
         logger.error(f"Error setting up Google Cloud credentials: {str(e)}")
         return None
 
+# Subscription management
+def subscribe_to_channel(channel_id):
+    hub_url = "https://pubsubhubbub.appspot.com/subscribe"
+    callback_url = "https://skyward-production.up.railway.app/youtube/webhook"
+    data = {
+        "hub.mode": "subscribe",
+        "hub.topic": f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}",
+        "hub.callback": callback_url
+    }
+    response = requests.post(hub_url, data=data)
+    if response.status_code in (202, 204):
+        logger.info(f"Subscribed to channel: {channel_id}")
+    else:
+        logger.error(f"Failed to subscribe to {channel_id}: {response.text}")
+
+def unsubscribe_from_channel(channel_id):
+    hub_url = "https://pubsubhubbub.appspot.com/subscribe"
+    callback_url = "https://skyward-production.up.railway.app/youtube/webhook"
+    data = {
+        "hub.mode": "unsubscribe",
+        "hub.topic": f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}",
+        "hub.callback": callback_url
+    }
+    response = requests.post(hub_url, data=data)
+    if response.status_code in (202, 204):
+        logger.info(f"Unsubscribed from channel: {channel_id}")
+    else:
+        logger.error(f"Failed to unsubscribe from {channel_id}: {response.text}")
+
+def renew_subscriptions():
+    with db.session_scope() as session:
+        talents = session.query(ApprovedTalent).all()
+        for talent in talents:
+            unsubscribe_from_channel(talent.channel_id)  # Optional: clean up old subscription
+            subscribe_to_channel(talent.channel_id)
+
 # Retrieve the YouTube API key
 def get_api_key():
     return get_secret('youtube_api_key', credentials)
@@ -168,6 +205,52 @@ class TalentVideo(db.Model):
 def index():
     var1 = os.environ.get('VAR1', 'default')
     return f'VAR1 is {var1}'
+
+# Webhook for PubSubHubbub notifications
+@app.route('/youtube/webhook', methods=['GET', 'POST'])
+def youtube_webhook():
+    if request.method == 'GET':  # Subscription verification
+        challenge = request.args.get('hub.challenge')
+        logger.info(f"Verifying webhook with challenge: {challenge}")
+        return challenge, 200
+
+    # POST: New video notification
+    xml_data = request.data.decode('utf-8')
+    logger.info(f"Received webhook notification: {xml_data[:100]}...")  # Truncate for brevity
+    root = ET.fromstring(xml_data)
+    video_id = root.find('.//{http://www.youtube.com/xml/schemas/2015}videoId').text
+    channel_id = root.find('.//{http://www.youtube.com/xml/schemas/2015}channelId').text
+    published_at = root.find('.//{http://www.w3.org/2005/Atom}published').text
+
+    # Check if video is live
+    api_key = get_api_key()
+    response = requests.get(
+        "https://www.googleapis.com/youtube/v3/videos",
+        params={
+            "key": api_key,
+            "id": video_id,
+            "part": "liveStreamingDetails,snippet"
+        }
+    )
+    if response.status_code == 200:
+        data = response.json()
+        if data['items'] and 'liveStreamingDetails' in data['items'][0]:
+            with db.session_scope() as session:
+                talent = session.query(ApprovedTalent).filter_by(channel_id=channel_id).first()
+                if talent and not session.query(TalentVideo).filter_by(video_id=video_id).first():
+                    video = TalentVideo(
+                        video_id=video_id,
+                        title=data['items'][0]['snippet']['title'],
+                        published_at=published_at,
+                        talent_id=talent.id
+                    )
+                    session.add(video)
+                    session.commit()
+                    logger.info(f"Cached live video: {video_id} for {talent.talent_name}")
+    else:
+        logger.error(f"Failed to fetch video details: {response.text}")
+
+    return '', 204
 
 @app.route('/get_next_video', methods=['GET'])
 @limiter.limit("20 per minute")
@@ -416,15 +499,12 @@ def watch_video():
     logger.info(f"Serving watch page for videoId: {video_id}")
     return html_content
 
-# Scheduler Setup
-try:
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_talent_videos, trigger="interval", minutes=240)
-    scheduler.start()
-    logger.info("Scheduler started successfully")
-except Exception as e:
-    logger.error(f"Failed to start scheduler: {str(e)}")
+# Scheduler for automatic renewal (every 6 days)
+scheduler = BackgroundScheduler()
+scheduler.add_job(renew_subscriptions, 'interval', days=6)
+scheduler.start()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    setup_credentials()
+    renew_subscriptions()  # Initial subscription on startup
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
