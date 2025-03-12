@@ -432,6 +432,13 @@ def get_talents():
         logger.error(f"Error querying talents: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+# Test route
+@app.route('/test_subscription')
+def test_subscription():
+    with app.app_context():
+        subscribe_to_channel("UCgnfPPb9JI3e9A4cXHnWbyg")  # Shiori Novella
+    return "Subscription test triggered", 200
+
 @app.route('/talent_videos', methods=['GET'])
 @limiter.limit("10 per minute")
 def get_talent_videos():
@@ -510,5 +517,6 @@ scheduler.start()
 
 if __name__ == '__main__':
     setup_credentials()
-    renew_subscriptions()  # Initial subscription on startup
+    with app.app_context():
+        renew_subscriptions()  # Run synchronously on startup
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
