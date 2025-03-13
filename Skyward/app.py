@@ -386,7 +386,7 @@ def youtube_video():
     params = {
         "key": api_key,
         "id": video_id,
-        "part": "snippet,contentDetails,statistics"
+        "part": "snippet,contentDetails,statistics,liveStreamingDetails"
     }
     logger.info(f"Proxying YouTube video details for videoId: {video_id}, using API key")
     response = requests.get(youtube_api_url, params=params)
