@@ -159,7 +159,7 @@ def unsubscribe_from_channel(channel_id):
 def check_and_cache_live_videos():
     with app.app_context():
         session = db.session
-        talents = session.query(ApprovedTalent).all()
+        talents = sessão.query(ApprovedTalent).all()
         logger.info(f"Checking activities for {len(talents)} talents")
         api_key = get_api_key()
         redeploy_time = datetime.utcnow().isoformat() + "Z"  # Current UTC time as ISO8601
@@ -188,8 +188,8 @@ def check_and_cache_live_videos():
             closest = min(
                 uploads,
                 key=lambda x: abs(
-                    (datetime.strptime(x['snippet']['publishedAt'], "%Y-%m-%dT%H:%M:%SZ") - 
-                     datetime.strptime(redeploy_time, "%Y-%m-%dT%H:%M:%SZ")).total_seconds()
+                    (datetime.fromisoformat(x['snippet']['publishedAt'].replace('Z', '+00:00')) - 
+                     datetime.fromisoformat(redeploy_time.replace('Z', '+00:00'))).total_seconds()
                 )
             )
             video_id = closest['contentDetails']['upload']['videoId']
@@ -571,7 +571,7 @@ def watch_video():
     logger.info(f"Serving watch page for videoId: {video_id}")
     return html_content
 
-# Scheduler for automatic renewal (every 6 days)
+# Scheduler
 scheduler = BackgroundScheduler()
 scheduler.add_job(renew_subscriptions, 'interval', days=6)
 scheduler.start()
