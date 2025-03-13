@@ -159,7 +159,7 @@ def unsubscribe_from_channel(channel_id):
 def check_and_cache_live_videos():
     with app.app_context():
         session = db.session
-        talents = sessão.query(ApprovedTalent).all()
+        talents = session.query(ApprovedTalent).all()
         logger.info(f"Checking activities for {len(talents)} talents")
         api_key = get_api_key()
         redeploy_time = datetime.utcnow().isoformat() + "Z"  # Current UTC time as ISO8601
