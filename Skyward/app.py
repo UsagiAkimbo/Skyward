@@ -309,14 +309,10 @@ def get_next_video():
 @app.route('/set_video', methods=['POST'])
 @limiter.limit("10 per minute")
 def set_video():
-    provided_key = request.headers.get('X-API-Key')
     api_key = get_api_key()
     if not api_key:
         logger.error("API key retrieval failed for /set_video")
         abort(500, description="Internal server error: API key unavailable")
-    if provided_key != api_key:
-        logger.warning("Invalid API key provided for /set_video.")
-        abort(403, description="Forbidden: Invalid API key")
     data = request.get_json()
     if not data or 'videoId' not in data:
         logger.warning("Bad Request: 'videoId' missing in payload for /set_video.")
