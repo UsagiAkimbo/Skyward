@@ -156,11 +156,6 @@ def unsubscribe_from_channel(channel_id):
     else:
         logger.error(f"Failed to unsubscribe from {channel_id}: {response.text}")
 
-@app.route('/refresh_videos', methods=['GET'])
-def refresh_videos():
-    check_and_cache_live_videos()
-    return jsonify({"status": "Videos refreshed"}), 200
-
 def check_and_cache_live_videos():
     with app.app_context():
         session = db.session
@@ -431,6 +426,11 @@ def update_talent_videos():
         except Exception as e:
             logger.error(f"Error in update_talent_videos: {str(e)}")
             db.session.rollback()
+
+@app.route('/refresh_videos', methods=['GET'])
+def refresh_videos():
+    check_and_cache_live_videos()
+    return jsonify({"status": "Videos refreshed"}), 200
 
 # Test routes
 @app.route('/dump_db', methods=['GET'])
