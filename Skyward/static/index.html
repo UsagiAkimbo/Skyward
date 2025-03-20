@@ -1,68 +1,78 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <title>Secure YouTube Player</title>
-    <!-- Load the YouTube IFrame API -->
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-    // Default pre-approved video ID (this should always be a safe video)
-    var defaultVideoId = "DEFAULT_VIDEO_ID"; // Replace with your safe default video ID
+    // Default pre-approved video ID (fallback if no videoId is provided)
+    var defaultVideoId = "DEFAULT_VIDEO_ID"; // Replace with a safe default video ID
     var player;
 
-    // Called automatically by the YouTube IFrame API when it's ready.
+    // Function to get query parameter from URL
+    function getQueryParam(name) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(name);
+    }
+
+    // Called automatically by the YouTube IFrame API when it's ready
     function onYouTubeIframeAPIReady() {
-      player = new YT.Player('player', {
-        height: '390',
-        width: '640',
-        videoId: defaultVideoId,
-        events: {
-          'onReady': onPlayerReady
-        }
-      });
-    }
+        // Get videoId from URL query parameter, fallback to default
+        var initialVideoId = getQueryParam('videoId') || defaultVideoId;
+        defaultVideoId = initialVideoId; // Set initial video as default
 
-    // Optional: Called when the player is ready.
-    function onPlayerReady(event) {
-      // Optionally, you might autoplay here:
-      // event.target.playVideo();
-    }
-
-    // Function to load a new video using a pre-approved video ID.
-    function loadVideo(videoId) {
-      // You might add additional client-side validation here if desired.
-      player.loadVideoById(videoId);
-    }
-
-    // Function to fetch commands from the Flask backend.
-    // Note: Ensure that the endpoint URL is correctly set for your Railway server.
-    function fetchCommand() {
-      fetch('/get_next_video')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error("Network response was not ok");
-          }
-          return response.json();
-        })
-        .then(data => {
-          // Expecting the Flask endpoint to return a JSON object like { "videoId": "APPROVED_VIDEO_ID" }
-          if (data.videoId && data.videoId !== defaultVideoId) {
-            loadVideo(data.videoId);
-            // Update the defaultVideoId to match the current video
-            defaultVideoId = data.videoId;
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching video command:', error);
+        player = new YT.Player('player', {
+            height: '100%',
+            width: '100%',
+            videoId: initialVideoId,
+            playerVars: { 'autoplay': 1, 'controls': 0, 'modestbranding': 1, 'rel': 0 },
+            events: {
+                'onReady': onPlayerReady,
+                'onError': onPlayerError
+            }
         });
     }
 
-    // Poll for new commands every 5 seconds.
+    // Called when the player is ready
+    function onPlayerReady(event) {
+        console.log('Player ready with video: ' + defaultVideoId);
+        event.target.playVideo(); // Ensure autoplay works
+    }
+
+    // Log errors for debugging
+    function onPlayerError(event) {
+        console.error('YouTube Player Error: ' + event.data);
+    }
+
+    // Function to load a new video
+    function loadVideo(videoId) {
+        if (videoId && videoId !== defaultVideoId) {
+            player.loadVideoById(videoId);
+            defaultVideoId = videoId;
+        }
+    }
+
+    // Poll for new video commands every 5 seconds
+    function fetchCommand() {
+        fetch('/get_next_video')
+            .then(response => {
+                if (!response.ok) throw new Error("Network response was not ok");
+                return response.json();
+            })
+            .then(data => {
+                if (data.videoId && data.videoId !== defaultVideoId) {
+                    loadVideo(data.videoId);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching video command:', error);
+            });
+    }
+
     setInterval(fetchCommand, 5000);
     </script>
 </head>
-<body>
-    <!-- Container for the YouTube IFrame Player -->
+<body style="margin:0;padding:0;background:black;">
     <div id="player"></div>
 </body>
 </html>
