@@ -512,11 +512,14 @@ def watch_video():
     video_id = request.args.get('videoId')
     if not video_id or not TalentVideo.query.filter_by(video_id=video_id).first():
         abort(403, description="Forbidden: Video not approved.")
-    html = f"""
+    html =  f"""
     <!DOCTYPE html>
     <html>
+    <head>
+        <script src="https://www.youtube.com/iframe_api"></script>
+    </head>
     <body style="margin:0;padding:0;background:black;">
-        <iframe id="player" width="100%" height="100%" src="https://www.youtube.com/embed/{video_id}?autoplay=1&controls=1&modestbranding=1&rel=0" frameborder="0" allowfullscreen></iframe>
+        <div id="player"></div>
     </body>
     </html>
     """
