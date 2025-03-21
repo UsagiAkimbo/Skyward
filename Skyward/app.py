@@ -510,16 +510,18 @@ def get_talent_videos():
 @limiter.limit("20 per minute")
 def watch_video():
     video_id = request.args.get('videoId')
-    if not video_id:
-        logger.warning("Missing videoId parameter in /watch request.")
-        abort(400, description="Missing videoId parameter.")
-    if not TalentVideo.query.filter_by(video_id=video_id).first():
-        logger.warning(f"Unauthorized video_id attempted: {video_id}")
+    if not video_id or not TalentVideo.query.filter_by(video_id=video_id).first():
         abort(403, description="Forbidden: Video not approved.")
-    
-    # Serve the static HTML file with the videoId as a query parameter
-    logger.info(f"Serving SkywardHTML for videoId: {video_id}")
-    return send_from_directory('static', 'index.html')
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="margin:0;padding:0;background:black;">
+        <iframe id="player" width="100%" height="100%" src="https://www.youtube.com/embed/{video_id}?autoplay=1&controls=1&modestbranding=1&rel=0" frameborder="0" allowfullscreen></iframe>
+    </body>
+    </html>
+    """
+    logger.info(f"Serving watch page for videoId: {video_id}")
+    return html
 
 # Scheduler
 scheduler = BackgroundScheduler()
