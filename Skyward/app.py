@@ -512,7 +512,7 @@ def watch_video():
     video_id = request.args.get('videoId')
     if not video_id or not TalentVideo.query.filter_by(video_id=video_id).first():
         abort(403, description="Forbidden: Video not approved.")
-    html =  f"""
+    html = f"""
     <!DOCTYPE html>
     <html>
     <head>
