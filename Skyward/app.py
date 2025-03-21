@@ -510,13 +510,48 @@ def get_talent_videos():
 @limiter.limit("20 per minute")
 def watch_video():
     video_id = request.args.get('videoId')
-    if not video_id or not TalentVideo.query.filter_by(video_id=video_id).first():
+    if not video_id:
+        logger.warning("Missing videoId parameter in /watch request.")
+        abort(400, description="Missing videoId parameter.")
+    if not TalentVideo.query.filter_by(video_id=video_id).first():
+        logger.warning(f"Unauthorized video_id attempted: {video_id}")
         abort(403, description="Forbidden: Video not approved.")
-    html = f"""
+    html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
+        <title>Secure YouTube Player</title>
         <script src="https://www.youtube.com/iframe_api"></script>
+        <script>
+        var defaultVideoId = "{video_id}";
+        var player;
+        function onYouTubeIframeAPIReady() {{
+            player = new YT.Player('player', {{
+                height: '100%',
+                width: '100%',
+                videoId: defaultVideoId,
+                playerVars: {{ 'autoplay': 1, 'controls': 0, 'modestbranding': 1, 'rel': 0 }},
+                events: {{ 'onReady': onPlayerReady }}
+            }});
+        }}
+        function onPlayerReady(event) {{ }}
+        function loadVideo(videoId) {{
+            player.loadVideoById(videoId);
+            defaultVideoId = videoId;
+        }}
+        function fetchCommand() {{
+            fetch('/get_next_video').then(response => {{
+                if (!response.ok) throw new Error("Network response was not ok");
+                return response.json();
+            }}).then(data => {{
+                if (data.videoId && data.videoId !== defaultVideoId) loadVideo(data.videoId);
+            }}).catch(error => {{
+                console.error('Error fetching video command:', error);
+            }});
+        }}
+        setInterval(fetchCommand, 5000);
+        </script>
     </head>
     <body style="margin:0;padding:0;background:black;">
         <div id="player"></div>
@@ -524,7 +559,7 @@ def watch_video():
     </html>
     """
     logger.info(f"Serving watch page for videoId: {video_id}")
-    return html
+    return html_content
 
 # Scheduler
 scheduler = BackgroundScheduler()
