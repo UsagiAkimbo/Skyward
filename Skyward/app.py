@@ -519,7 +519,7 @@ def watch_video():
     
     # Serve the static HTML file with the videoId as a query parameter
     logger.info(f"Serving SkywardHTML for videoId: {video_id}")
-    return send_from_directory('static', 'SkywardHTML.html')
+    return send_from_directory('static', 'index.html')
 
 # Scheduler
 scheduler = BackgroundScheduler()
