@@ -1,4 +1,4 @@
-buildImage = "ubuntu:24.04"
+buildImage = "ghcr.io/railwayapp/nixpacks:ubuntu-2204"
 
 [phases.setup]
 nixPkgs = ["python312", "ffmpeg", "xvfb-run"]
