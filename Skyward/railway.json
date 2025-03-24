@@ -2,9 +2,13 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "./Dockerfile"
+    "dockerfilePath": "Skyward/Dockerfile"
   },
   "deploy": {
-    "startCommand": "gunicorn --bind 0.0.0.0:8080 --workers 2 --timeout 300 app:app"
+    "startCommand": "gunicorn --bind 0.0.0.0:8080 --workers 2 --timeout 300 app:app",
+    "restartPolicy": {
+      "type": "ON_FAILURE",
+      "maxRetries": 3
+    }
   }
 }
