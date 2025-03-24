@@ -559,39 +559,9 @@ def watch_video():
     <head>
         <meta charset="UTF-8">
         <title>Secure YouTube Player</title>
-        <script src="https://www.youtube.com/iframe_api"></script>
-        <script>
-        var defaultVideoId = "{video_id}";
-        var player;
-        function onYouTubeIframeAPIReady() {{
-            player = new YT.Player('player', {{
-                height: '100%',
-                width: '100%',
-                videoId: defaultVideoId,
-                playerVars: {{ 'autoplay': 1, 'controls': 0, 'modestbranding': 1, 'rel': 0 }},
-                events: {{ 'onReady': onPlayerReady }}
-            }});
-        }}
-        function onPlayerReady(event) {{ }}
-        function loadVideo(videoId) {{
-            player.loadVideoById(videoId);
-            defaultVideoId = videoId;
-        }}
-        function fetchCommand() {{
-            fetch('/get_next_video').then(response => {{
-                if (!response.ok) throw new Error("Network response was not ok");
-                return response.json();
-            }}).then(data => {{
-                if (data.videoId && data.videoId !== defaultVideoId) loadVideo(data.videoId);
-            }}).catch(error => {{
-                console.error('Error fetching video command:', error);
-            }});
-        }}
-        setInterval(fetchCommand, 5000);
-        </script>
     </head>
     <body style="margin:0;padding:0;background:black;">
-        <div id="player"></div>
+        <iframe width="100%" height="100%" src="https://www.youtube.com/embed/{video_id}?autoplay=1&controls=0&modestbranding=1&rel=0" frameborder="0" allowfullscreen></iframe>
     </body>
     </html>
     """
