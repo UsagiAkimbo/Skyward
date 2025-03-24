@@ -1,17 +1,15 @@
-buildImage = "ghcr.io/railwayapp/nixpacks:ubuntu-2204"
+buildImage = "ubuntu:24.04"
 
 [phases.setup]
-nixPkgs = ["python312", "ffmpeg", "xvfb-run"]
-cmds = ["curl -fsSL https://nixos.org/nix/install | sh", "nix-env -i python3.12 ffmpeg xvfb-run"]
-aptPkgs = ["xvfb"]
-
-[phases.build]
+aptPkgs = ["curl", "sudo"]  # For Nix install
 cmds = [
-". /opt/venv/bin/activate", 
-"pip install -r requirements.txt",
-"pip install pytest-playwright",
-"playwright install chromium"
+  "curl -fsSL https://nixos.org/nix/install | sh -s -- --no-daemon",
+  ". /root/.nix-profile/etc/profile.d/nix.sh",
+  "nix-env -iA nixpkgs.python312 nixpkgs.ffmpeg nixpkgs.xvfb-run"
 ]
 
-[start]
-cmd = "Xvfb :0 -screen 0 1920x1080x24 & gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 300 app:app"
+[phases.install]
+cmds = ["python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt"]
+
+[phases.build]
+cmds = [". /opt/venv/bin/activate && playwright install chromium"]
