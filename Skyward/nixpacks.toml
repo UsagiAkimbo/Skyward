@@ -1,7 +1,7 @@
 buildImage = "ubuntu:24.04"
 [phases.setup]
-aptPkgs = ["python3-pip", "ffmpeg", "xvfb"]
+aptPkgs = ["python312", "ffmpeg", "xvfb"]
 [phases.install]
-cmds = ["pip3 install -r requirements.txt"]
+cmds = ["pip install -r requirements.txt"]
 [phases.build]
 cmds = ["playwright install chromium"]
