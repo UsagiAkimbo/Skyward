@@ -1,5 +1,6 @@
 [phases.setup]
 nixPkgs = ["python312", "ffmpeg", "xvfb-run"]
+nixpacksVersion = "1.24.0"
 
 [phases.build]
 cmds = [". /opt/venv/bin/activate && pip install -r requirements.txt && playwright install chromium"]
