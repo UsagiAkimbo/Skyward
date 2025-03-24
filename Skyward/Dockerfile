@@ -15,14 +15,15 @@ RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libcairo2 \
     libasound2 \
-    xvfb
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
 # Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 
 # Copy app
@@ -32,4 +33,4 @@ COPY app.py .
 EXPOSE 8080
 
 # Run Gunicorn with Xvfb
-CMD ["sh", "-c", "Xvfb :0 -screen 0 1920x1080x24 & gunicorn --bind 0.0.0.0:8080 app:app"]
+CMD ["sh", "-c", "Xvfb :0 -screen 0 1920x1080x24 & gunicorn --bind 0.0.0.0:8080 --workers 2 --timeout 300 app:app"]
