@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python39", "ffmpeg", "xorg.xvfb"]
+nixPkgs = ["python39", "ffmpeg", "xvfb-run"]
 
 [phases.build]
 cmds = ["pip install -r requirements.txt", "playwright install chromium"]
