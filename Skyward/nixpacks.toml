@@ -2,6 +2,7 @@ buildImage = "ghcr.io/railwayapp/nixpacks:ubuntu-2204"
 
 [phases.setup]
 nixPkgs = ["python312", "ffmpeg", "xvfb-run"]
+cmds = ["curl -fsSL https://nixos.org/nix/install | sh", "nix-env -i python3.12 ffmpeg xvfb-run"]
 aptPkgs = ["xvfb"]
 
 [phases.build]
