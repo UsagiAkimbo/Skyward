@@ -1,0 +1,27 @@
+# Use ubuntu:24.04 as the base image (GLIBC 2.39)
+FROM ubuntu:24.04
+
+# Install basic dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    sudo \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Nix package manager
+RUN curl -L https://nixos.org/nix/install | sh -s -- --no-daemon \
+    && . /root/.nix-profile/etc/profile.d/nix.sh \
+    && nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs \
+    && nix-channel --update
+
+# Set Nix environment variables
+ENV PATH="/root/.nix-profile/bin:/root/.nix-profile/sbin:${PATH}"
+
+# Install Python 3.12, FFmpeg, and xvfb-run via Nix
+RUN nix-env -iA nixpkgs.python312 nixpkgs.ffmpeg nixpkgs.xvfb-run
+
+# Verify installations
+RUN python3 --version && ffmpeg -version && xvfb-run --version
+
+# Set working directory
+WORKDIR /app
