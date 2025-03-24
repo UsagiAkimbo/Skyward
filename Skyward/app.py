@@ -5,8 +5,10 @@ import requests
 import sqlite3  # Added for dump_db endpoint
 import json
 import struct  # Added for binary decoding
+import ffmpeg
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, abort
+from playwright.sync_api import sync_playwright
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -504,6 +506,41 @@ def get_talent_videos():
         })
     logger.info(f"Returning talent videos for {len(result)} talents")
     return jsonify(result)
+
+@app.route('/watch_proxy', methods=['GET'])
+def watch_proxy():
+    video_id = request.args.get('videoId')
+    if not video_id or not TalentVideo.query.filter_by(video_id=video_id).first():
+        abort(403, description="Forbidden: Video not approved.")
+    
+    # Launch headless browser with Playwright
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-gpu'])
+        page = browser.new_page()
+        page.goto(f"https://skyward-production.up.railway.app/watch?videoId={video_id}", wait_until="networkidle")
+        
+        # Capture browser output with FFmpeg
+        try:
+            stream = ffmpeg.input('desktop', format='gdigrab', framerate=30)
+            stream = ffmpeg.output(stream, 'pipe:', format='mpegts', vcodec='mpeg1video', acodec='none', bitrate='1M')
+            process = ffmpeg.run_async(stream, pipe_stdout=True, pipe_stderr=True)
+            
+            def generate():
+                while True:
+                    chunk = process.stdout.read(1024)
+                    if not chunk:
+                        break
+                    yield chunk
+                process.stdout.close()
+                browser.close()
+            
+            logger.info(f"Streaming videoId: {video_id}")
+            return Response(generate(), mimetype='video/mpeg')
+        
+        except Exception as e:
+            logger.error(f"Streaming failed for videoId {video_id}: {str(e)}")
+            browser.close()
+            return abort(500, description=f"Streaming error: {str(e)}")
 
 # Display
 @app.route('/watch', methods=['GET'])
