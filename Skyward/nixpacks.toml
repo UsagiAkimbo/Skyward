@@ -6,6 +6,7 @@ nixpacksVersion = "1.24.0"  # Attempted to force a newer base with GLIBC 2.36+
 cmds = [
 ". /opt/venv/bin/activate", 
 "pip install -r requirements.txt",
+"pip install pytest-playwright",
 "playwright install chromium"
 ]
 
