@@ -1,11 +1,9 @@
 buildImage = "ubuntu:24.04"
 
 [phases.setup]
-aptPkgs = ["curl", "sudo"]  # For Nix install
+aptPkgs = ["curl", "sudo"]
 cmds = [
-  "curl -fsSL https://nixos.org/nix/install | sh -s -- --no-daemon",
-  ". /root/.nix-profile/etc/profile.d/nix.sh",
-  "nix-env -iA nixpkgs.python312 nixpkgs.ffmpeg nixpkgs.xvfb-run"
+  "curl -fsSL https://nixos.org/nix/install | sh -s -- --no-daemon && . /root/.nix-profile/etc/profile.d/nix.sh && nix-env -iA nixpkgs.python312 nixpkgs.ffmpeg nixpkgs.xvfb-run"
 ]
 
 [phases.install]
