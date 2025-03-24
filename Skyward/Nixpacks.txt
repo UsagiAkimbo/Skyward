@@ -1,6 +1,0 @@
-[phases.setup]
-nixPkgs = ["python312", "ffmpeg", "xvfb-run"]
-nixpkgsArchive = "23.11"  # GLIBC 2.38 channel
-
-[phases.build]
-cmds = ["apt-get update && apt-get install -y xvfb", ". /opt/venv/bin/activate && pip install -r requirements.txt && playwright install chromium"]
