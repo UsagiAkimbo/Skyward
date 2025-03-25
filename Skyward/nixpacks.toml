@@ -1,4 +1,4 @@
-buildImage = "yourusername/custom-nix-ubuntu:24.04"
+buildImage = "usagiakimbo/custom-nix-ubuntu:24.04"
 providers = []  # Disable all default providers, no Nix env setup
 
 [phases.install]
