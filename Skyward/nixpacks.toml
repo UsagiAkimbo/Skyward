@@ -13,6 +13,8 @@ cmds = [
   "apt-get update",
   "apt-get install -y --no-install-recommends ${APT_PKGS}",
   "dpkg-reconfigure -f noninteractive x11-common",
+  "mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix",
+  "touch /tmp/.Xauthority && chmod 600 /tmp/.Xauthority",
   "ldconfig",
   "ls -l /usr/lib/x86_64-linux-gnu/libstdc++.so.6 || echo 'libstdc++.so.6 not found'"
 ]
