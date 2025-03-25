@@ -17,6 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from google.cloud import secretmanager
 from google.oauth2 import service_account
 from xml.etree import ElementTree as ET
+from yt_dlp import YoutubeDL
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -510,18 +511,30 @@ def get_talent_videos():
 @app.route('/watch_proxy')
 def watch_proxy():
     video_id = request.args.get('videoId')
+    if not video_id:
+        logging.error("Missing videoId parameter")
+        return Response("Missing videoId parameter", status=400)
+
     logging.info(f"Serving watch page for videoId: {video_id}")
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(f"https://www.youtube.com/watch?v={video_id}")
-        logging.info(f"Streaming videoId: {video_id}")
-        try:
-            content = page.content()
-            return Response(content, mimetype='text/html')
-        except Exception as e:
-            logging.error(f"Streaming failed for videoId {video_id}: {str(e)}")
-            return Response(f"Error: {str(e)}", status=500)
+    ydl_opts = {
+        'format': 'bestvideo+bestaudio/best',  # Prioritize video+audio or best available
+        'quiet': True,
+        'no_warnings': True,
+        'simulate': True,  # Don’t download, just extract URL
+        'get_url': True,   # Extract direct URL
+    }
+
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            video_url = info.get('url') or info.get('formats', [{}])[0].get('url')
+            if not video_url:
+                raise ValueError("No stream URL found")
+            logging.info(f"Streaming videoId: {video_id} from {video_url}")
+            return Response(video_url, mimetype='text/plain')  # Unity expects a URL
+    except Exception as e:
+        logging.error(f"Streaming failed for videoId {video_id}: {str(e)}")
+        return Response(f"Error: {str(e)}", status=500)
 
 # Display
 @app.route('/watch', methods=['GET'])
