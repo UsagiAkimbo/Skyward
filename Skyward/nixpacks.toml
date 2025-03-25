@@ -25,6 +25,7 @@ aptPkgs = [
   "libexpat1",
   "libstdc++6"
 ]
+cmds = ["apt-get update && apt-get install -y --no-install-recommends ${APT_PKGS} && ldconfig"]
 
 [phases.install]
 cmds = ["/nix/var/nix/profiles/default/bin/python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt"]
