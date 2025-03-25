@@ -21,6 +21,3 @@ cmds = ["/nix/var/nix/profiles/default/bin/python3 -m venv /opt/venv && . /opt/v
 
 [phases.build]
 cmds = [". /opt/venv/bin/activate && playwright install chromium"]
-
-[phases.build]
-cmds = [". /opt/venv/bin/activate && playwright install chromium"]
