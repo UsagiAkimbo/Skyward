@@ -1,13 +1,10 @@
-buildImage = "ubuntu:24.04"
-
-[phases.setup]
-aptPkgs = ["curl", "sudo"]
-cmds = [
-  "curl -fsSL https://nixos.org/nix/install | sh -s -- --no-daemon && . /root/.nix-profile/etc/profile.d/nix.sh && nix-env -iA nixpkgs.python312 nixpkgs.ffmpeg nixpkgs.xvfb-run"
-]
+buildImage = "usagiakimbo/custom-nix-ubuntu:24.04"
 
 [phases.install]
 cmds = ["python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt"]
+
+[phases.build]
+cmds = [". /opt/venv/bin/activate && playwright install chromium"]
 
 [phases.build]
 cmds = [". /opt/venv/bin/activate && playwright install chromium"]
