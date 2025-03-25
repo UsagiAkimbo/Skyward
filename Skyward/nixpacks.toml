@@ -7,7 +7,8 @@ aptPkgs = [
   "libatk-bridge2.0-0", "libx11-6", "libxcomposite1", "libxdamage1",
   "libxext6", "libxfixes3", "libxrandr2", "libgbm1", "libxcb1",
   "libxkbcommon0", "libpango-1.0-0", "libcairo2", "libasound2t64",
-  "libatspi2.0-0", "libexpat1", "libstdc++6", "xvfb", "x11-utils", "apt-utils"
+  "libatspi2.0-0", "libexpat1", "libstdc++6", "xvfb", "x11-utils", "apt-utils",
+  "libgcc-s1"
 ]
 cmds = [
   "apt-get update",
