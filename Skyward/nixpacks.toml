@@ -20,9 +20,10 @@ aptPkgs = [
   "libxkbcommon0",
   "libpango-1.0-0",
   "libcairo2",
-  "libasound2t64",  # Updated from libasound2
+  "libasound2t64",
   "libatspi2.0-0",
-  "libexpat1"
+  "libexpat1",
+  "libstdc++6"
 ]
 
 [phases.install]
