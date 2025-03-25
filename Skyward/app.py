@@ -7,7 +7,8 @@ import json
 import struct  # Added for binary decoding
 import ffmpeg
 from datetime import datetime
-from flask import Flask, jsonify, request, send_from_directory, abort, redirect
+from flask import Flask, jsonify, request, send_from_directory, abort, redirect, Response
+from yt_dlp import YoutubeDL
 from playwright.sync_api import sync_playwright
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -29,6 +30,8 @@ DB_PATH = '/app/Database.sqlite'
 
 # Path to the binary protocol file (renamed to garbage.bin)
 GARBAGE_BIN_PATH = os.path.join(os.path.dirname(__file__), 'garbage.bin')
+
+BASE_URL = os.getenv('BASE_URL', 'https://skyward-production.up.railway.app')
 
 # Database connection function for SQLite
 def get_db_connection():
@@ -516,6 +519,20 @@ def watch_proxy():
         return Response("Missing videoId parameter", status=400)
 
     logging.info(f"Serving watch page for videoId: {video_id}")
+    # Step 1: Get iframe HTML from /watch
+    watch_url = f"{BASE_URL}/watch?videoId={video_id}"
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(watch_url)
+        iframe_src = page.query_selector('iframe').get_attribute('src')  # e.g., "https://www.youtube.com/embed/2rifjk558yM"
+        browser.close()
+
+    if not iframe_src:
+        logging.error(f"Failed to extract iframe src for videoId: {video_id}")
+        return Response("Failed to extract iframe URL", status=500)
+
+    # Step 2: Extract HLS URL from iframe src
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'quiet': True,
@@ -523,10 +540,9 @@ def watch_proxy():
         'simulate': True,
         'get_url': True,
     }
-
     try:
         with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            info = ydl.extract_info(iframe_src, download=False)
             video_url = info.get('url') or info.get('formats', [{}])[0].get('url')
             if not video_url:
                 raise ValueError("No stream URL found")
