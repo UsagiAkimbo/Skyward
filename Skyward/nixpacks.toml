@@ -1,7 +1,7 @@
 buildImage = "usagiakimbo/custom-nix-ubuntu:24.04"
 
 [phases.install]
-cmds = ["python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt"]
+cmds = ["/nix/var/nix/profiles/default/bin/python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt"]
 
 [phases.build]
 cmds = [". /opt/venv/bin/activate && playwright install chromium"]
