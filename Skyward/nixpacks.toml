@@ -3,27 +3,11 @@ providers = []
 
 [phases.setup]
 aptPkgs = [
-  "libglib2.0-0",
-  "libnss3",
-  "libcups2",
-  "libdbus-1-3",
-  "libatk1.0-0",
-  "libatk-bridge2.0-0",
-  "libx11-6",
-  "libxcomposite1",
-  "libxdamage1",
-  "libxext6",
-  "libxfixes3",
-  "libxrandr2",
-  "libgbm1",
-  "libxcb1",
-  "libxkbcommon0",
-  "libpango-1.0-0",
-  "libcairo2",
-  "libasound2t64",
-  "libatspi2.0-0",
-  "libexpat1",
-  "libstdc++6"
+  "libglib2.0-0", "libnss3", "libcups2", "libdbus-1-3", "libatk1.0-0",
+  "libatk-bridge2.0-0", "libx11-6", "libxcomposite1", "libxdamage1",
+  "libxext6", "libxfixes3", "libxrandr2", "libgbm1", "libxcb1",
+  "libxkbcommon0", "libpango-1.0-0", "libcairo2", "libasound2t64",
+  "libatspi2.0-0", "libexpat1", "libstdc++6"
 ]
 cmds = [
   "apt-get update",
@@ -34,6 +18,9 @@ cmds = [
 
 [phases.install]
 cmds = ["/nix/var/nix/profiles/default/bin/python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt"]
+
+[phases.build]
+cmds = [". /opt/venv/bin/activate && playwright install chromium"]
 
 [phases.build]
 cmds = [". /opt/venv/bin/activate && playwright install chromium"]
