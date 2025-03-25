@@ -6,6 +6,7 @@ import sqlite3  # Added for dump_db endpoint
 import json
 import struct  # Added for binary decoding
 import ffmpeg
+import requests
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, abort, redirect, Response
 from yt_dlp import YoutubeDL
@@ -519,20 +520,14 @@ def watch_proxy():
         return Response("Missing videoId parameter", status=400)
 
     logging.info(f"Serving watch page for videoId: {video_id}")
-    # Step 1: Get iframe HTML from /watch
     watch_url = f"{BASE_URL}/watch?videoId={video_id}"
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(watch_url)
-        iframe_src = page.query_selector('iframe').get_attribute('src')  # e.g., "https://www.youtube.com/embed/2rifjk558yM"
+        iframe_src = page.query_selector('iframe').get_attribute('src')
         browser.close()
 
-    if not iframe_src:
-        logging.error(f"Failed to extract iframe src for videoId: {video_id}")
-        return Response("Failed to extract iframe URL", status=500)
-
-    # Step 2: Extract HLS URL from iframe src
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'quiet': True,
@@ -543,13 +538,32 @@ def watch_proxy():
     try:
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(iframe_src, download=False)
-            video_url = info.get('url') or info.get('formats', [{}])[0].get('url')
-            if not video_url:
+            m3u8_url = info.get('url') or info.get('formats', [{}])[0].get('url')
+            if not m3u8_url:
                 raise ValueError("No stream URL found")
-            logging.info(f"Streaming videoId: {video_id} from {video_url}")
-            return redirect(video_url)  # Redirect to HLS URL
+            logging.info(f"Streaming videoId: {video_id} from {m3u8_url}")
+            # Fetch M3U8 content
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/134.0.0.0'}
+            m3u8_resp = requests.get(m3u8_url, headers=headers)
+            m3u8_content = m3u8_resp.text
+            # Rewrite chunk URLs to proxy through Flask
+            m3u8_content = m3u8_content.replace('https://', f'{BASE_URL}/proxy_chunk?url=https://')
+            return Response(m3u8_content, mimetype='application/vnd.apple.mpegurl')
     except Exception as e:
         logging.error(f"Streaming failed for videoId {video_id}: {str(e)}")
+        return Response(f"Error: {str(e)}", status=500)
+
+@app.route('/proxy_chunk')
+def proxy_chunk():
+    chunk_url = request.args.get('url')
+    if not chunk_url:
+        return Response("Missing chunk URL", status=400)
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/134.0.0.0'}
+    try:
+        chunk_resp = requests.get(chunk_url, headers=headers, stream=True)
+        return Response(chunk_resp.content, mimetype='video/MP2T')
+    except Exception as e:
+        logging.error(f"Failed to proxy chunk {chunk_url}: {str(e)}")
         return Response(f"Error: {str(e)}", status=500)
 
 # Display
