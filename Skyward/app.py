@@ -7,7 +7,7 @@ import json
 import struct  # Added for binary decoding
 import ffmpeg
 from datetime import datetime
-from flask import Flask, jsonify, request, send_from_directory, abort, Response
+from flask import Flask, jsonify, request, send_from_directory, abort, redirect
 from playwright.sync_api import sync_playwright
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -517,11 +517,11 @@ def watch_proxy():
 
     logging.info(f"Serving watch page for videoId: {video_id}")
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',  # Prioritize video+audio or best available
+        'format': 'bestvideo+bestaudio/best',
         'quiet': True,
         'no_warnings': True,
-        'simulate': True,  # Don’t download, just extract URL
-        'get_url': True,   # Extract direct URL
+        'simulate': True,
+        'get_url': True,
     }
 
     try:
@@ -531,7 +531,7 @@ def watch_proxy():
             if not video_url:
                 raise ValueError("No stream URL found")
             logging.info(f"Streaming videoId: {video_id} from {video_url}")
-            return Response(video_url, mimetype='text/plain')  # Unity expects a URL
+            return redirect(video_url)  # Redirect to HLS URL
     except Exception as e:
         logging.error(f"Streaming failed for videoId {video_id}: {str(e)}")
         return Response(f"Error: {str(e)}", status=500)
