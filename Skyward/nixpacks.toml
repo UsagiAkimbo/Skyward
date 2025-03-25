@@ -1,4 +1,5 @@
-buildImage = "usagiakimbo/custom-nix-ubuntu:24.04"
+buildImage = "yourusername/custom-nix-ubuntu:24.04"
+providers = []  # Disable all default providers, no Nix env setup
 
 [phases.install]
 cmds = ["/nix/var/nix/profiles/default/bin/python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt"]
