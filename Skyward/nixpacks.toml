@@ -5,6 +5,3 @@ cmds = ["python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r
 
 [phases.build]
 cmds = [". /opt/venv/bin/activate && playwright install chromium"]
-
-[phases.build]
-cmds = [". /opt/venv/bin/activate && playwright install chromium"]
