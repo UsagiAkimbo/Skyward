@@ -1,1 +1,1 @@
-web: . /opt/venv/bin/activate && echo "Starting Xvfb and Gunicorn" && LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH /usr/bin/xvfb-run -a gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 300 app:app
+web: . /opt/venv/bin/activate && echo "Starting Xvfb and Gunicorn" && LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH /usr/bin/xvfb-run -a -e /tmp/xvfb.log gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 300 app:app
