@@ -1,1 +1,1 @@
-web: . /opt/venv/bin/activate && export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH && xvfb-run -a gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 300 app:app
+web: /bin/bash -c ". /opt/venv/bin/activate && LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH xvfb-run -a gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 300 app:app"
