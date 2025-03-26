@@ -7,6 +7,7 @@ import json
 import struct  # Added for binary decoding
 import ffmpeg
 import requests
+import subprocess
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, abort, redirect, Response
 from yt_dlp import YoutubeDL
@@ -223,6 +224,35 @@ def renew_subscriptions():
 # Retrieve the YouTube API key
 def get_api_key():
     return get_secret('youtube_api_key', credentials)
+
+def generate_mjpeg_stream(video_id):
+    """Stream the rendered iframe page as MJPEG frames."""
+    iframe_url = f"http://localhost:5000/watch?videoId={video_id}"
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(iframe_url)
+        page.wait_for_load_state("networkidle")
+
+        # Use ffmpeg with xvfb to capture the browser window as MJPEG
+        ffmpeg_cmd = (
+            f'ffmpeg -f x11grab -i :99 -f mjpeg -q:v 5 -r 15 -vf "scale=1280:720" - '
+        )
+        process = subprocess.Popen(
+            ffmpeg_cmd.split(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={**os.environ, "DISPLAY": ":99"}
+        )
+
+        while True:
+            frame = process.stdout.read(1024)  # Read frame chunks
+            if not frame:
+                break
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+        browser.close()
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static')
@@ -565,6 +595,14 @@ def proxy_chunk():
     except Exception as e:
         logging.error(f"Failed to proxy chunk {chunk_url}: {str(e)}")
         return Response(f"Error: {str(e)}", status=500)
+
+@app.route('/stream_iframe/<video_id>')
+def stream_iframe(video_id):
+    """Endpoint to stream MJPEG frames of the iframe page."""
+    return Response(
+        generate_mjpeg_stream(video_id),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
 
 # Display
 @app.route('/watch', methods=['GET'])
