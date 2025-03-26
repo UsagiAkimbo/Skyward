@@ -615,11 +615,6 @@ def proxy_chunk():
 def stream_iframe(video_id):
     """Endpoint to stream MJPEG frames of the iframe page."""
     logger.debug(f"Received request for /stream_iframe/{video_id}")
-    token = request.args.get('token')
-    if token != "your_secret_token":  # Replace with your actual token
-        logger.warning(f"Unauthorized access attempt with token: {token}")
-        return "Unauthorized", 403
-    logger.debug("Token validated, starting stream")
     return Response(
         generate_mjpeg_stream(video_id),
         mimetype='multipart/x-mixed-replace; boundary=frame'
