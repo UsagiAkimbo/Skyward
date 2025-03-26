@@ -21,6 +21,7 @@ from google.cloud import secretmanager
 from google.oauth2 import service_account
 from xml.etree import ElementTree as ET
 from yt_dlp import YoutubeDL
+from flask_socketio import SocketIO
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -233,6 +234,8 @@ credentials = setup_credentials()  # Set up credentials at startup
 print("Environment variables at startup:", os.environ)
 CORS(app)
 
+socketio = SocketIO(app, async_mode='gevent')  # Use gevent for WebSocket support
+
 # Rate Limiting Setup
 limiter = Limiter(key_func=get_remote_address, default_limits=["100 per day", "20 per hour"])
 limiter.init_app(app)
@@ -262,19 +265,15 @@ class TalentVideo(db.Model):
     title = db.Column(db.String(256))
 
 def generate_mjpeg_stream(video_id):
-    """Stream the rendered iframe page as MJPEG frames."""
     logger.debug(f"Starting MJPEG stream generation for video_id: {video_id}")
-    iframe_url = f"http://skyward-production.up.railway.app/watch?videoId={video_id}"
-    
-    # Simulate Playwright for simplicity (replace with actual Playwright if needed)
-    logger.debug(f"Preparing to render iframe URL: {iframe_url}")
-    
-    # Use ffmpeg with xvfb to capture the virtual display
+    iframe_url = f"http://localhost:5000/watch?videoId={video_id}"
+    logger.debug(f"Rendering iframe URL: {iframe_url}")
+
     ffmpeg_cmd = (
         f'ffmpeg -f x11grab -i :99 -f mjpeg -q:v 5 -r 15 -vf "scale=1280:720" - '
     )
     logger.debug(f"Executing ffmpeg command: {ffmpeg_cmd}")
-    
+
     try:
         process = subprocess.Popen(
             ffmpeg_cmd.split(),
@@ -283,27 +282,46 @@ def generate_mjpeg_stream(video_id):
             env={**os.environ, "DISPLAY": ":99"}
         )
         logger.debug("ffmpeg process started successfully")
-        
+
         frame_count = 0
         while True:
-            frame = process.stdout.read(1024)  # Read frame chunks
+            frame = process.stdout.read(1024)
             if not frame:
-                logger.warning("No more frame data received from ffmpeg, ending stream")
+                logger.warning("No more frame data from ffmpeg, ending stream")
                 break
             frame_count += 1
-            logger.debug(f"Yielding frame {frame_count}, size: {len(frame)} bytes")
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-        
+            logger.debug(f"Generated frame {frame_count}, size: {len(frame)} bytes")
+            yield frame  # Yield raw frame bytes for WebSocket
+
         stderr_output = process.stderr.read().decode()
         if stderr_output:
             logger.error(f"ffmpeg stderr: {stderr_output}")
         process.terminate()
         logger.debug("ffmpeg process terminated")
-    
+
     except Exception as e:
         logger.error(f"Error in MJPEG stream generation: {str(e)}")
         raise
+
+@socketio.on('connect')
+def handle_connect():
+    logger.debug("Client connected to WebSocket")
+
+@socketio.on('stream_request')
+def handle_stream_request(data):
+    video_id = data.get('video_id')
+    token = data.get('token')
+    logger.debug(f"Received stream request: video_id={video_id}, token={token}")
+
+    if token != "your_secret_token":
+        logger.warning(f"Unauthorized stream request with token: {token}")
+        socketio.emit('error', {'message': 'Unauthorized'})
+        return
+
+    logger.debug(f"Starting WebSocket stream for video_id: {video_id}")
+    for frame in generate_mjpeg_stream(video_id):
+        socketio.emit('frame', frame, binary=True)
+        logger.debug(f"Sent frame via WebSocket, size: {len(frame)} bytes")
 
 @app.route('/')
 @limiter.exempt
@@ -648,4 +666,5 @@ if __name__ == '__main__':
     with app.app_context():
         check_and_cache_live_videos()  # Initial check on startup
         renew_subscriptions()
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    logger.info(f"Starting Flask-SocketIO server on 0.0.0.0:{port}")
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
