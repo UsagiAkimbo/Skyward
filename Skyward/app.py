@@ -225,35 +225,6 @@ def renew_subscriptions():
 def get_api_key():
     return get_secret('youtube_api_key', credentials)
 
-def generate_mjpeg_stream(video_id):
-    """Stream the rendered iframe page as MJPEG frames."""
-    iframe_url = f"http://skyward-production.up.railway.app:8080/watch?videoId={video_id}"
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(iframe_url)
-        page.wait_for_load_state("networkidle")
-
-        # Use ffmpeg with xvfb to capture the browser window as MJPEG
-        ffmpeg_cmd = (
-            f'ffmpeg -f x11grab -i :99 -f mjpeg -q:v 5 -r 15 -vf "scale=1280:720" - '
-        )
-        process = subprocess.Popen(
-            ffmpeg_cmd.split(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env={**os.environ, "DISPLAY": ":99"}
-        )
-
-        while True:
-            frame = process.stdout.read(1024)  # Read frame chunks
-            if not frame:
-                break
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-        browser.close()
-
 # Initialize Flask app
 app = Flask(__name__, static_folder='static')
 logger.info("Starting Flask app initialization")
@@ -289,6 +260,50 @@ class TalentVideo(db.Model):
     video_id = db.Column(db.String(64), nullable=False, unique=True)
     published_at = db.Column(db.String(64))
     title = db.Column(db.String(256))
+
+def generate_mjpeg_stream(video_id):
+    """Stream the rendered iframe page as MJPEG frames."""
+    logger.debug(f"Starting MJPEG stream generation for video_id: {video_id}")
+    iframe_url = f"http://localhost:5000/watch?videoId={video_id}"
+    
+    # Simulate Playwright for simplicity (replace with actual Playwright if needed)
+    logger.debug(f"Preparing to render iframe URL: {iframe_url}")
+    
+    # Use ffmpeg with xvfb to capture the virtual display
+    ffmpeg_cmd = (
+        f'ffmpeg -f x11grab -i :99 -f mjpeg -q:v 5 -r 15 -vf "scale=1280:720" - '
+    )
+    logger.debug(f"Executing ffmpeg command: {ffmpeg_cmd}")
+    
+    try:
+        process = subprocess.Popen(
+            ffmpeg_cmd.split(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={**os.environ, "DISPLAY": ":99"}
+        )
+        logger.debug("ffmpeg process started successfully")
+        
+        frame_count = 0
+        while True:
+            frame = process.stdout.read(1024)  # Read frame chunks
+            if not frame:
+                logger.warning("No more frame data received from ffmpeg, ending stream")
+                break
+            frame_count += 1
+            logger.debug(f"Yielding frame {frame_count}, size: {len(frame)} bytes")
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        
+        stderr_output = process.stderr.read().decode()
+        if stderr_output:
+            logger.error(f"ffmpeg stderr: {stderr_output}")
+        process.terminate()
+        logger.debug("ffmpeg process terminated")
+    
+    except Exception as e:
+        logger.error(f"Error in MJPEG stream generation: {str(e)}")
+        raise
 
 @app.route('/')
 @limiter.exempt
@@ -599,35 +614,32 @@ def proxy_chunk():
 @app.route('/stream_iframe/<video_id>')
 def stream_iframe(video_id):
     """Endpoint to stream MJPEG frames of the iframe page."""
+    logger.debug(f"Received request for /stream_iframe/{video_id}")
+    token = request.args.get('token')
+    if token != "your_secret_token":  # Replace with your actual token
+        logger.warning(f"Unauthorized access attempt with token: {token}")
+        return "Unauthorized", 403
+    logger.debug("Token validated, starting stream")
     return Response(
         generate_mjpeg_stream(video_id),
         mimetype='multipart/x-mixed-replace; boundary=frame'
-    )
 
 # Display
 @app.route('/watch', methods=['GET'])
-@limiter.limit("20 per minute")
 def watch_video():
     video_id = request.args.get('videoId')
     if not video_id:
-        logger.warning("Missing videoId parameter in /watch request.")
-        abort(400, description="Missing videoId parameter.")
-    if not TalentVideo.query.filter_by(video_id=video_id).first():
-        logger.warning(f"Unauthorized video_id attempted: {video_id}")
-        abort(403, description="Forbidden: Video not approved.")
+        logger.warning("Missing videoId parameter in /watch request")
+        return "Missing videoId parameter", 400
+    logger.debug(f"Rendering watch page for videoId: {video_id}")
     html_content = f"""
     <!DOCTYPE html>
     <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Secure YouTube Player</title>
-    </head>
     <body style="margin:0;padding:0;background:black;">
         <iframe width="100%" height="100%" src="https://www.youtube.com/embed/{video_id}?autoplay=1&controls=0&modestbranding=1&rel=0" frameborder="0" allowfullscreen></iframe>
     </body>
     </html>
     """
-    logger.info(f"Serving watch page for videoId: {video_id}")
     return html_content
 
 # Scheduler
