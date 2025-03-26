@@ -687,5 +687,5 @@ if __name__ == '__main__':
         check_and_cache_live_videos()  # Initial check on startup
         renew_subscriptions()
     logger.info(f"Starting Flask server with WebSocket on 0.0.0.0:{port}")
-    http_server = WSGIServer(('0.0.0.0', port=int(os.environ.get('PORT', 8080))), app, handler_class=WebSocketHandler)
+    http_server = WSGIServer(('0.0.0.0', port==int(os.environ.get('PORT', 8080))), app, handler_class=WebSocketHandler)
     http_server.serve_forever()
