@@ -264,7 +264,7 @@ class TalentVideo(db.Model):
 def generate_mjpeg_stream(video_id):
     """Stream the rendered iframe page as MJPEG frames."""
     logger.debug(f"Starting MJPEG stream generation for video_id: {video_id}")
-    iframe_url = f"http://localhost:5000/watch?videoId={video_id}"
+    iframe_url = f"http://skyward-production.up.railway.app/watch?videoId={video_id}"
     
     # Simulate Playwright for simplicity (replace with actual Playwright if needed)
     logger.debug(f"Preparing to render iframe URL: {iframe_url}")
