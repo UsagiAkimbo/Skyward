@@ -623,6 +623,7 @@ def stream_iframe(video_id):
     return Response(
         generate_mjpeg_stream(video_id),
         mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
 
 # Display
 @app.route('/watch', methods=['GET'])
