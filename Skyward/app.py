@@ -24,7 +24,7 @@ from yt_dlp import YoutubeDL
 from flask_socketio import SocketIO
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 logger.info("Current API_KEY: " + os.environ.get("API_KEY", "Not Found"))
 
@@ -265,8 +265,9 @@ class TalentVideo(db.Model):
     title = db.Column(db.String(256))
 
 def generate_mjpeg_stream(video_id):
-    logger.debug(f"Starting MJPEG stream generation for video_id: {video_id}")
-    iframe_url = f"http://localhost:5000/watch?videoId={video_id}"
+    logger.debug(f"Starting MJPEG stream for video_id: {video_id}")
+    port = os.environ.get('PORT', 5000)
+    iframe_url = f"http://localhost:{port}/watch?videoId={video_id}"
     logger.debug(f"Rendering iframe URL: {iframe_url}")
 
     ffmpeg_cmd = (
@@ -281,17 +282,17 @@ def generate_mjpeg_stream(video_id):
             stderr=subprocess.PIPE,
             env={**os.environ, "DISPLAY": ":99"}
         )
-        logger.debug("ffmpeg process started successfully")
+        logger.debug("ffmpeg process started, PID: %d", process.pid)
 
         frame_count = 0
         while True:
             frame = process.stdout.read(1024)
             if not frame:
-                logger.warning("No more frame data from ffmpeg, ending stream")
+                logger.warning("No more frame data from ffmpeg")
                 break
             frame_count += 1
             logger.debug(f"Generated frame {frame_count}, size: {len(frame)} bytes")
-            yield frame  # Yield raw frame bytes for WebSocket
+            yield frame
 
         stderr_output = process.stderr.read().decode()
         if stderr_output:
@@ -300,25 +301,26 @@ def generate_mjpeg_stream(video_id):
         logger.debug("ffmpeg process terminated")
 
     except Exception as e:
-        logger.error(f"Error in MJPEG stream generation: {str(e)}")
+        logger.error(f"Error in MJPEG stream: {str(e)}")
         raise
 
 @socketio.on('connect')
 def handle_connect():
-    logger.debug("Client connected to WebSocket")
+    logger.debug("Client connected to WebSocket from %s", request.remote_addr)
 
 @socketio.on('stream_request')
 def handle_stream_request(data):
+    logger.debug("Received stream_request: %s", data)
     video_id = data.get('video_id')
     token = data.get('token')
-    logger.debug(f"Received stream request: video_id={video_id}, token={token}")
+    logger.debug(f"Processing request: video_id={video_id}, token={token}")
 
     if token != "your_secret_token":
-        logger.warning(f"Unauthorized stream request with token: {token}")
+        logger.warning("Unauthorized request with token: %s", token)
         socketio.emit('error', {'message': 'Unauthorized'})
         return
 
-    logger.debug(f"Starting WebSocket stream for video_id: {video_id}")
+    logger.info(f"Starting WebSocket stream for video_id: {video_id}")
     for frame in generate_mjpeg_stream(video_id):
         socketio.emit('frame', frame, binary=True)
         logger.debug(f"Sent frame via WebSocket, size: {len(frame)} bytes")
@@ -643,7 +645,7 @@ def stream_iframe(video_id):
 def watch_video():
     video_id = request.args.get('videoId')
     if not video_id:
-        logger.warning("Missing videoId parameter in /watch request")
+        logger.warning("Missing videoId in /watch request")
         return "Missing videoId parameter", 400
     logger.debug(f"Rendering watch page for videoId: {video_id}")
     html_content = f"""
