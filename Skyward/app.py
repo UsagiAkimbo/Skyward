@@ -22,6 +22,8 @@ from google.oauth2 import service_account
 from xml.etree import ElementTree as ET
 from yt_dlp import YoutubeDL
 from flask_socketio import SocketIO
+from geventwebsocket.handler import WebSocketHandler
+from gevent.pywsgi import WSGIServer
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -306,19 +308,19 @@ def generate_mjpeg_stream(video_id):
 
 @socketio.on('connect')
 def handle_connect():
-    logger.debug("Client connected to WebSocket from %s", request.remote_addr)
+    logger.debug("Client connected to Socket.IO from %s", request.remote_addr)
     socketio.emit('connected', {'message': 'Connection established'})
 
 @socketio.on('stream_request')
 def handle_stream_request(data):
     logger.debug("Received stream_request: %s", data)
     video_id = data.get('video_id')
-    logger.debug(f"Processing request: video_id={video_id}")
+    logger.debug(f"Processing Socket.IO request: video_id={video_id}")
 
-    logger.info(f"Starting WebSocket stream for video_id: {video_id}")
+    logger.info(f"Starting Socket.IO stream for video_id: {video_id}")
     for frame in generate_mjpeg_stream(video_id):
         socketio.emit('frame', frame, binary=True)
-        logger.debug(f"Sent frame via WebSocket, size: {len(frame)} bytes")
+        logger.debug(f"Sent frame via Socket.IO, size: {len(frame)} bytes")
 
 @app.route('/')
 @limiter.exempt
@@ -635,6 +637,27 @@ def stream_iframe(video_id):
         mimetype='multipart/x-mixed-replace; boundary=frame'
     )
 
+@app.route('/websocket_stream/<video_id>')
+def websocket_stream(video_id):
+    logger.debug(f"Received WebSocket request for /websocket_stream/{video_id}")
+    if 'wsgi.websocket' not in request.environ:
+        logger.error("WebSocket not supported in this request")
+        return "WebSocket connection required", 400
+
+    ws = request.environ['wsgi.websocket']
+    logger.debug("WebSocket connection established")
+
+    try:
+        for frame in generate_mjpeg_stream(video_id):
+            ws.send(frame, binary=True)
+            logger.debug(f"Sent frame via WebSocket, size: {len(frame)} bytes")
+    except Exception as e:
+        logger.error(f"WebSocket stream error: {str(e)}")
+    finally:
+        ws.close()
+        logger.debug("WebSocket connection closed")
+    return ""
+
 # Display
 @app.route('/watch', methods=['GET'])
 def watch_video():
@@ -663,5 +686,6 @@ if __name__ == '__main__':
     with app.app_context():
         check_and_cache_live_videos()  # Initial check on startup
         renew_subscriptions()
-    logger.info(f"Starting Flask-SocketIO server on 0.0.0.0:{port}")
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    logger.info(f"Starting Flask server with WebSocket on 0.0.0.0:{port}")
+    http_server = WSGIServer(('0.0.0.0', port=int(os.environ.get('PORT', 8080))), app, handler_class=WebSocketHandler)
+    http_server.serve_forever()
