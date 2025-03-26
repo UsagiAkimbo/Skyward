@@ -9,7 +9,8 @@ aptPkgs = [
   "libxkbcommon0", "libpango-1.0-0", "libcairo2", "libasound2t64",
   "libatspi2.0-0", "libexpat1", "libstdc++6", "xvfb", "x11-utils", "apt-utils",
   "python3", "python3-pip", "python3-venv", "libx11-dev",
-  "build-essential", "libxv-dev", "libxrender-dev", "libxtst-dev" # For FFmpeg X11
+  "build-essential", "libxv-dev", "libxrender-dev", "libxtst-dev",
+  "libxext-dev", "libxi-dev", "pkg-config" # Added for X11 and FFmpeg
 ]
 cmds = [
   "apt-get update",
