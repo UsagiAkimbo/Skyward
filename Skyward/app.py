@@ -234,7 +234,7 @@ credentials = setup_credentials()  # Set up credentials at startup
 print("Environment variables at startup:", os.environ)
 CORS(app)
 
-socketio = SocketIO(app, async_mode='gevent')  # Use gevent for WebSocket support
+socketio = SocketIO(app, async_mode='gevent', logger=True, engineio_logger=True)  # Use gevent for WebSocket support
 
 # Rate Limiting Setup
 limiter = Limiter(key_func=get_remote_address, default_limits=["100 per day", "20 per hour"])
@@ -307,18 +307,13 @@ def generate_mjpeg_stream(video_id):
 @socketio.on('connect')
 def handle_connect():
     logger.debug("Client connected to WebSocket from %s", request.remote_addr)
+    socketio.emit('connected', {'message': 'Connection established'})
 
 @socketio.on('stream_request')
 def handle_stream_request(data):
     logger.debug("Received stream_request: %s", data)
     video_id = data.get('video_id')
-    token = data.get('token')
-    logger.debug(f"Processing request: video_id={video_id}, token={token}")
-
-    if token != "your_secret_token":
-        logger.warning("Unauthorized request with token: %s", token)
-        socketio.emit('error', {'message': 'Unauthorized'})
-        return
+    logger.debug(f"Processing request: video_id={video_id}")
 
     logger.info(f"Starting WebSocket stream for video_id: {video_id}")
     for frame in generate_mjpeg_stream(video_id):
@@ -633,8 +628,8 @@ def proxy_chunk():
 
 @app.route('/stream_iframe/<video_id>')
 def stream_iframe(video_id):
-    """Endpoint to stream MJPEG frames of the iframe page."""
-    logger.debug(f"Received request for /stream_iframe/{video_id}")
+    logger.debug(f"Received HTTP request for /stream_iframe/{video_id}")
+    logger.debug("Starting HTTP stream")
     return Response(
         generate_mjpeg_stream(video_id),
         mimetype='multipart/x-mixed-replace; boundary=frame'
