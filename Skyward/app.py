@@ -227,7 +227,7 @@ def get_api_key():
 
 def generate_mjpeg_stream(video_id):
     """Stream the rendered iframe page as MJPEG frames."""
-    iframe_url = f"http://localhost:5000/watch?videoId={video_id}"
+    iframe_url = f"http://skyward-production.up.railway.app:8080/watch?videoId={video_id}"
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
