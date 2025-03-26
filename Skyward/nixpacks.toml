@@ -1,41 +1,34 @@
-buildImage = "usagiakimbo/custom-nix-ubuntu:24.04"
+# Use the custom image with FFmpeg and x11grab already included
+buildImage = "usagiakimbo/custom-nix-ubuntu:24.04-x11grab"
+
+# No providers specified, assuming you're handling the app setup manually
 providers = []
 
 [phases.setup]
+# Additional apt packages for your app (e.g., Playwright, Chromium deps)
 aptPkgs = [
   "libglib2.0-0", "libnss3", "libcups2", "libdbus-1-3", "libatk1.0-0",
   "libatk-bridge2.0-0", "libx11-6", "libxcomposite1", "libxdamage1",
   "libxext6", "libxfixes3", "libxrandr2", "libgbm1", "libxcb1",
   "libxkbcommon0", "libpango-1.0-0", "libcairo2", "libasound2t64",
-  "libatspi2.0-0", "libexpat1", "libstdc++6", "xvfb", "x11-utils", "apt-utils",
-  "python3", "python3-pip", "python3-venv", "libx11-dev",
-  "build-essential", "libxv-dev", "libxrender-dev", "libxtst-dev",
-  "libxext-dev", "libxi-dev", "pkg-config" # Added for X11 and FFmpeg
+  "libatspi2.0-0", "libexpat1", "libstdc++6", "apt-utils",
+  "python3-pip", "python3-venv"  # Already in base image, but ensuring pip/venv
 ]
 cmds = [
   "apt-get update",
   "apt-get install -y --no-install-recommends ${APT_PKGS}",
+  # Configure X11 and setup dirs (still needed for runtime)
   "dpkg-reconfigure -f noninteractive x11-common",
   "mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix",
   "touch /tmp/.Xauthority && chmod 600 /tmp/.Xauthority",
-  "ldconfig",
-  "ls -l /usr/lib/x86_64-linux-gnu/libstdc++.so.6 || echo 'libstdc++.so.6 not found'"
-]
-
-[phases.install]
-cmds = [
-  "/usr/bin/python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt",
-  "apt-get install -y ffmpeg"
+  "ldconfig"
 ]
 
 [phases.build]
 cmds = [
-  # Build FFmpeg with X11 support
-  "apt-get install -y wget nasm",
-  "wget https://ffmpeg.org/releases/ffmpeg-7.1.tar.bz2",
-  "tar -xjf ffmpeg-7.1.tar.bz2",
-  "cd ffmpeg-7.1 && ./configure --enable-gpl --enable-libx11 --enable-x11grab --enable-shared && make -j4 && make install",
-  "cd .. && rm -rf ffmpeg-7.1 ffmpeg-7.1.tar.bz2",
-  "/usr/bin/python3 -m venv /opt/venv && . /opt/venv/bin/activate && pip install -r requirements.txt",
+  # Set up Python virtual env and install dependencies
+  "/usr/bin/python3 -m venv /opt/venv",
+  ". /opt/venv/bin/activate && pip install -r requirements.txt",
+  # Install Playwright and Chromium
   ". /opt/venv/bin/activate && playwright install chromium"
 ]
